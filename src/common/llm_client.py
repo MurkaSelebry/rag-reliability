@@ -126,7 +126,10 @@ def _verdict_positions(tokens: list[dict]) -> list[int]:
             if t and t != w and w.startswith(t):
                 acc, j = t, i + 1
                 while j < n and acc != w and w.startswith(acc):
-                    acc += tokens[j]["token"].strip().upper()
+                    piece = tokens[j]["token"].strip().upper()
+                    if not piece:
+                        break  # пробельный подтокен разрывает склейку
+                    acc += piece
                     j += 1
                 if acc == w:
                     out.append(i)

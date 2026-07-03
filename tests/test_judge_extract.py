@@ -77,3 +77,9 @@ def test_exact_token_preferred_over_prefix():
     p_with_prefix = _pass_prob(t)
     t2 = tok(" PASS", top={" PASS": -0.1, " FAIL": -2.4})
     assert p_with_prefix == pytest.approx(_pass_prob(t2), abs=1e-9)
+
+
+def test_whitespace_subtoken_breaks_merge():
+    """'PA' + ' ' + 'SS' — пробельный токен разрывает склейку, это не вердикт."""
+    tokens = [tok("PA"), tok(" "), tok("SS"), tok(" FAIL")]
+    assert _verdict_positions(tokens) == [3]
