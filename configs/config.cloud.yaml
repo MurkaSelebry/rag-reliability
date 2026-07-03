@@ -19,8 +19,8 @@ llm:
       require_parameters: true      # роутить только к провайдерам, поддерживающим
                                     # ВСЕ параметры запроса (logprobs/top_logprobs)
       allow_fallbacks: false        # без тихой подмены провайдера между запросами
-      # order: ["DeepInfra"]        # раскомментировать после smoke-теста:
-                                    # зафиксировать провайдера, прошедшего проверку
+      order: ["Phala"]              # зафиксирован после smoke-теста (task-3):
+                                    # единственный провайдер, вернувший top_logprobs
 
 data:
   train: "data/processed/pseudo_dev_train.jsonl"
