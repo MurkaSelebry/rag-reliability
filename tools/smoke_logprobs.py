@@ -26,7 +26,15 @@ def recoverable(tokens: list[str], word: str) -> bool:
     ups = [t.strip().upper() for t in tokens]
     if word in ups:
         return True
-    return word in "".join(ups)
+    for i in range(len(ups)):
+        acc = ""
+        for j in range(i, len(ups)):
+            acc += ups[j]
+            if acc == word:
+                return True
+            if not word.startswith(acc):
+                break
+    return False
 
 
 def main() -> int:
