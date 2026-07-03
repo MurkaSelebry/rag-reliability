@@ -1,0 +1,12 @@
+openai>=1.40
+dspy>=2.6.14
+transformers>=4.44
+torch>=2.3
+sentence-transformers>=3.0
+scikit-learn>=1.4
+numpy
+pyyaml
+tqdm
+razdel
+pytest
+datasets>=2.20

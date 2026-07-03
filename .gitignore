@@ -1,0 +1,12 @@
+# данные и артефакты не коммитим (правило проекта)
+artifacts/
+data/
+# секреты
+.env
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+.superpowers/

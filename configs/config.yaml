@@ -1,0 +1,41 @@
+# Общий конфиг для методов 3 (GEPA-judge) и 6 (SelfCheck)
+
+llm:
+  api_base: "http://localhost:8000/v1"   # vLLM OpenAI-compatible сервер
+  api_key: "EMPTY"
+  model: "Qwen/Qwen2.5-7B-Instruct"      # backbone, единый для всех LLM-методов
+  reflection_model: "Qwen/Qwen2.5-32B-Instruct"  # для GEPA; поднять вторым vLLM или тем же
+  reflection_api_base: "http://localhost:8001/v1"
+  max_ctx_chars: 24000                   # грубое усечение контекста при переполнении
+
+data:
+  train: "data/processed/dev_train.jsonl"
+  val:   "data/processed/dev_val.jsonl"
+  test:  "data/processed/dev_test.jsonl"
+
+m3:
+  mode: "gepa"            # zero_shot | few_shot | gepa
+  gepa_auto: "light"      # light | medium | heavy
+  gepa_train_size: 300    # подвыборка dev-train для оптимизации
+  use_marker_feedback: true   # false = прогон для H5 (feedback без маркеров)
+  seed: 0
+  out_prompt: "artifacts/m3_optimized_prompt.txt"
+  out_pred_dir: "predictions/m3"
+
+m6:
+  n_samples: 10
+  temperature: 0.8
+  top_p: 0.95
+  max_new_tokens: 512
+  nli_model: "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+  embed_model: "intfloat/multilingual-e5-large"
+  samples_cache: "artifacts/m6_samples"
+  features_cache: "artifacts/m6_features"
+  out_pred_dir: "predictions/m6"
+  entail_threshold: 0.5   # порог двунаправленного entailment для кластеризации
+
+# Профиль по умолчанию — local. Для облачной отладки создать
+# configs/config.cloud.yaml с тем же форматом (llm.api_base/api_key/model
+# провайдера) и запускать скрипты с --config configs/config.cloud.yaml.
+# Правила cloud-режима: CLAUDE.md + docs/07_api_policy_pseudo_corpus.md.
+profile: local
