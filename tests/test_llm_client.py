@@ -47,7 +47,7 @@ def test_n_fallback_tops_up(monkeypatch):
     c = _client(monkeypatch, fake)
     out = c.chat([{"role": "user", "content": "x"}], n=3, temperature=0.8, public_data=True)
     assert [o["text"] for o in out] == ["s1", "s2", "s3"]
-    assert len(calls) == 3
+    assert calls == [3, 1, 1]  # первый запрос n=3, добор одиночными
 
 
 def test_model_override():
@@ -71,6 +71,13 @@ def test_n_fallback_on_provider_error(monkeypatch):
     out = c.chat([{"role": "user", "content": "x"}], n=3, temperature=0.8, public_data=True)
     assert [o["text"] for o in out] == ["s1", "s2", "s3"]
     assert calls == [3, 1, 1, 1]  # одна неудачная попытка n=3, затем одиночные
+
+
+def test_top_up_empty_choices_raises(monkeypatch):
+    """Провайдер возвращает 0 choices — ошибка вместо вечного цикла добора."""
+    c = _client(monkeypatch, lambda **kw: [])
+    with pytest.raises(RuntimeError):
+        c.chat([{"role": "user", "content": "x"}], n=3, public_data=True)
 
 
 # ---- A2: guard-by-default ----

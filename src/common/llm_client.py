@@ -26,7 +26,7 @@ class LLMClient:
         llm = cfg["llm"]
         self.profile: str = cfg.get("profile", "local")
         self.model: str = model or llm["model"]
-        self.extra_body: dict = llm.get("openrouter_extra_body") or {}
+        self.extra_body: dict = dict(llm.get("openrouter_extra_body") or {})
         self.client = OpenAI(base_url=llm["api_base"], api_key=llm["api_key"])
 
     # ---------- низкоуровневый запрос с retry ----------
@@ -93,6 +93,9 @@ class LLMClient:
 
         # --- добор недостающих сэмплов одиночными запросами ---
         while len(choices) < n:
-            choices += self._request(messages=messages, temperature=temperature, n=1,
-                                     max_tokens=max_tokens, top_p=top_p, logprobs=logprobs)
+            new = self._request(messages=messages, temperature=temperature, n=1,
+                                max_tokens=max_tokens, top_p=top_p, logprobs=logprobs)
+            if not new:
+                raise RuntimeError("провайдер вернул 0 choices при n=1 — добор невозможен")
+            choices += new
         return choices[:n]
