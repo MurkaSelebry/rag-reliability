@@ -31,7 +31,7 @@ _KIND_CYCLE = ["clean", "hallucination", "clean", "incomplete_answer", "off_topi
 
 GEN_SYSTEM = ("Ты помогаешь готовить синтетические данные для тестирования систем "
               "проверки ответов. Выводи только текст ответа, без пояснений, преамбул "
-              "и кавычек.")
+              "и кавычек. Отвечай ТОЛЬКО на русском языке. Не повторяй вопрос в ответе.")
 
 GEN_USER: dict[str, str] = {
     "clean": ("Абзац:\n{par}\n\nВопрос: {q}\n\n"
@@ -40,6 +40,7 @@ GEN_USER: dict[str, str] = {
                       "Дай ответ на вопрос по абзацу (1–3 предложения), но намеренно "
                       "подмени ровно ОДИН факт — число, дату, имя или условие — на "
                       "правдоподобный, но неверный. Всё остальное оставь верным. "
+                      "ОБЯЗАТЕЛЬНО включи подмену: ответ без изменённого факта недопустим. "
                       "Никак не отмечай подмену."),
     "incomplete_answer": ("Абзац:\n{par}\n\nВопрос: {q}\n\n"
                           "Дай верный, но намеренно НЕПОЛНЫЙ ответ на вопрос: опусти "
@@ -48,7 +49,9 @@ GEN_USER: dict[str, str] = {
     "off_topic_answer": ("Абзац:\n{par}\n\nВопрос: {q}\n\n"
                          "Напиши верный по абзацу ответ (1–3 предложения) про ДРУГОЙ "
                          "аспект абзаца, который НЕ отвечает на заданный вопрос. "
-                         "Сам вопрос не упоминай."),
+                         "Сам вопрос не упоминай. "
+                         "НЕ давай прямой ответ на вопрос ни явно, ни косвенно: "
+                         "не называй факт, дату, имя или число, которое является ответом."),
 }
 
 
@@ -74,3 +77,90 @@ def split_ids(ids: list[str], seed: int) -> dict[str, list[str]]:
     return {"train": ids[: n - n_val - n_test],
             "val": ids[n - n_val - n_test: n - n_test],
             "test": ids[n - n_test:]}
+
+
+def load_pairs(source: str, n: int, seed: int) -> list[dict]:
+    """Пары (question, paragraph): SberQuAD (не более одного кейса на абзац) или свой jsonl."""
+    rng = random.Random(seed)
+    if source == "sberquad":
+        from datasets import load_dataset  # ленивый импорт (тяжёлый)
+        ds = load_dataset("kuznetsoffandrey/sberquad", split="train")
+        by_par: dict[str, dict] = {}
+        for row in ds:
+            by_par.setdefault(row["context"], {"question": row["question"],
+                                               "paragraph": row["context"]})
+        pool = list(by_par.values())
+    else:
+        pool = [json.loads(l) for l in open(source, encoding="utf-8") if l.strip()]
+    if len(pool) < n:
+        raise SystemExit(f"в источнике {len(pool)} абзацев, нужно {n}")
+    return rng.sample(pool, n)
+
+
+def generate_case(client: LLMClient, cache: Path, rng: random.Random,
+                  i: int, kind: str, pair: dict, par_pool: list[str]) -> dict:
+    """Один кейс канонического формата (docs/01) + meta; генерация кэшируется."""
+    cid = f"pseudo_{i:05d}"
+    cache_file = cache / f"{cid}.json"
+    if cache_file.exists():
+        answer = json.loads(cache_file.read_text(encoding="utf-8"))["answer"]
+    else:
+        messages = [{"role": "system", "content": GEN_SYSTEM},
+                    {"role": "user", "content": GEN_USER[kind].format(
+                        par=pair["paragraph"], q=pair["question"])}]
+        # публичные данные (SberQuAD), не корпус кураторов — флаг public_data=True
+        answer = client.chat(messages, temperature=0.7, max_tokens=300,
+                             public_data=True)[0]["text"].strip()
+        cache_file.write_text(json.dumps({"id": cid, "kind": kind, "answer": answer},
+                                         ensure_ascii=False), encoding="utf-8")
+    return {"id": cid, "query": pair["question"],
+            "context": build_context(rng, pair["paragraph"], par_pool),
+            "answer": answer, **LABELS[kind],
+            "meta": {"kind": kind, "synthetic": True}}
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default="configs/config.cloud.yaml")
+    ap.add_argument("--n", type=int, default=None, help="размер корпуса (дефолт из конфига)")
+    ap.add_argument("--limit", type=int, default=None, help="smoke: только первые N кейсов")
+    ap.add_argument("--source", default=None, help="sberquad | путь к jsonl {question, paragraph}")
+    ap.add_argument("--seed", type=int, default=None)
+    args = ap.parse_args()
+
+    cfg = load_config(args.config)
+    ps = cfg["pseudo"]
+    n = args.n or ps["n"]
+    seed = args.seed if args.seed is not None else ps["seed"]
+    source = args.source or ps["source"]
+
+    client = LLMClient(cfg, model=ps["gen_model"])
+    cache = Path(ps["cache"])
+    cache.mkdir(parents=True, exist_ok=True)
+
+    pairs = load_pairs(source, n, seed)
+    par_pool = [p["paragraph"] for p in pairs]
+    kinds = plan_kinds(n)
+    todo = min(n, args.limit) if args.limit else n
+
+    from tqdm import tqdm
+    rng = random.Random(seed)  # один rng на весь прогон -> детерминированные контексты
+    cases = [generate_case(client, cache, rng, i, kinds[i], pairs[i], par_pool)
+             for i in tqdm(range(todo), desc="pseudo")]
+
+    splits = split_ids([c["id"] for c in cases], seed)
+    by_id = {c["id"]: c for c in cases}
+    out_dir = Path(ps["out_dir"])
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for split, ids in splits.items():
+        path = out_dir / f"pseudo_dev_{split}.jsonl"
+        with open(path, "w", encoding="utf-8") as f:
+            for cid in ids:
+                if cid in by_id:
+                    f.write(json.dumps(by_id[cid], ensure_ascii=False) + "\n")
+        count = sum(1 for cid in ids if cid in by_id)
+        print(f"{path}: {count} кейсов")
+
+
+if __name__ == "__main__":
+    main()
