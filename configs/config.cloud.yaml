@@ -47,3 +47,11 @@ m6:
   features_cache: "artifacts/cloud/m6_features"
   out_pred_dir: "predictions/cloud/m6"
   entail_threshold: 0.5
+
+pseudo:
+  gen_model: "qwen/qwen-2.5-7b-instruct" # генератор ответов псевдо-корпуса (решение: 7B)
+  n: 300
+  seed: 42
+  source: "sberquad" # kuznetsoffandrey/sberquad, split train
+  cache: "artifacts/pseudo_gen" # поэлементный кэш генераций
+  out_dir: "data/processed" # pseudo_dev_{train,val,test}.jsonl
