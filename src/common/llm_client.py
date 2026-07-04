@@ -208,11 +208,13 @@ class JudgeClient(LLMClient):
     def judge(self, system: str, user: str, case: Case | None = None,
               max_tokens: int = 400) -> tuple[float, float, dict]:
         """-> (p_faith, p_rel, meta). Кейс не теряется никогда (fallback до 0.5/0.5)."""
-        if self.cache_dir:
-            cp = self._cache_path(system, user)
-            if cp.exists():
+        cp = self._cache_path(system, user) if self.cache_dir else None
+        if cp is not None and cp.exists():
+            try:
                 d = json.loads(cp.read_text(encoding="utf-8"))
                 return d["p_faith"], d["p_rel"], d["meta"]
+            except (json.JSONDecodeError, KeyError):
+                pass  # повреждённый кэш (обрыв записи) — трактуем как промах
         text, tokens = self._chat_judge(system, user, max_tokens, case=case)
         probs = extract_verdict_probs(tokens)
         if probs is not None:
@@ -226,7 +228,9 @@ class JudgeClient(LLMClient):
                 meta = {"method": "regex", "raw": text[-400:]}
             else:
                 p_f, p_r, meta = 0.5, 0.5, {"method": "default", "raw": text[-400:]}
-        if self.cache_dir:
-            cp.write_text(json.dumps({"p_faith": p_f, "p_rel": p_r, "meta": meta},
-                                     ensure_ascii=False), encoding="utf-8")
+        if cp is not None:
+            tmp = cp.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps({"p_faith": p_f, "p_rel": p_r, "meta": meta},
+                                      ensure_ascii=False), encoding="utf-8")
+            tmp.replace(cp)  # атомарная замена — обрыв не оставит битый кэш
         return p_f, p_r, meta

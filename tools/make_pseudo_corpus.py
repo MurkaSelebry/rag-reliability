@@ -103,8 +103,13 @@ def generate_case(client: LLMClient, cache: Path, rng: random.Random,
     """Один кейс канонического формата (docs/01) + meta; генерация кэшируется."""
     cid = f"pseudo_{i:05d}"
     cache_file = cache / f"{cid}.json"
+    cached = None
     if cache_file.exists():
-        cached = json.loads(cache_file.read_text(encoding="utf-8"))
+        try:
+            cached = json.loads(cache_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            cached = None  # повреждённый кэш (обрыв записи) — перегенерируем
+    if cached is not None:
         if cached.get("kind") != kind:
             raise ValueError(f"{cid}: кэш kind={cached.get('kind')}, ожидается {kind} — удали кэш")
         answer = cached["answer"]
@@ -117,8 +122,10 @@ def generate_case(client: LLMClient, cache: Path, rng: random.Random,
                              public_data=True)[0]["text"].strip()
         if not answer:
             raise ValueError(f"{cid}: пустой ответ от модели — не кэширую")
-        cache_file.write_text(json.dumps({"id": cid, "kind": kind, "answer": answer},
-                                         ensure_ascii=False), encoding="utf-8")
+        tmp = cache_file.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({"id": cid, "kind": kind, "answer": answer},
+                                  ensure_ascii=False), encoding="utf-8")
+        tmp.replace(cache_file)  # атомарная замена — обрыв не оставит битый кэш
     return {"id": cid, "query": pair["question"],
             "context": build_context(rng, pair["paragraph"], par_pool),
             "answer": answer, **LABELS[kind],
@@ -158,8 +165,14 @@ def main() -> None:
     by_id = {c["id"]: c for c in cases}
     out_dir = Path(ps["out_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
+    # smoke-прогон (--limit) пишет в суффиксные файлы, чтобы не затирать полный корпус
+    is_smoke = args.limit is not None
+    suffix = f"__smoke{args.limit}" if is_smoke else ""
+    if is_smoke:
+        print(f"smoke-режим (--limit {args.limit}): пишу в pseudo_dev_*{suffix}.jsonl, "
+              "полный корпус не трогаю")
     for split, ids in splits.items():
-        path = out_dir / f"pseudo_dev_{split}.jsonl"
+        path = out_dir / f"pseudo_dev_{split}{suffix}.jsonl"
         with open(path, "w", encoding="utf-8") as f:
             for cid in ids:
                 if cid in by_id:
