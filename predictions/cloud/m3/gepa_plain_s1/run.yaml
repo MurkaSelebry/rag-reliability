@@ -64,5 +64,5 @@ seed: 0
 split: test
 limit: null
 method: m3
-variant: gepa_markers_s0
-prompt_file: artifacts/cloud/m3_prompt_markers_seed0.txt
+variant: gepa_plain_s1
+prompt_file: artifacts/cloud/m3_prompt_plain_seed1.txt

@@ -58,10 +58,10 @@ config:
     source: sberquad
     cache: artifacts/pseudo_gen
     out_dir: data/processed
-git_hash: fa86d4dd8e799a9f38f7a38fefd6e5855b251fe9
+git_hash: 8638701450f515fba302d7ba183ab0e26c79a80d
 profile: cloud
 seed: 0
-split: val
+split: test
 limit: null
 method: m3
 variant: few_shot
