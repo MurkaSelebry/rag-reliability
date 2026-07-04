@@ -62,11 +62,16 @@ def main():
         z = scaler.transform(Xs[:, [0, 2]])
         return z.sum(axis=1)
 
+    if len(np.unique(y_f["val"])) < 2:
+        raise SystemExit("val не содержит обоих классов faith — увеличь --limit или проверь данные")
+
     iso = IsotonicRegression(out_of_bounds="clip")
     iso.fit(-raw_unfaith(X["val"]), y_f["val"])  # минус: больше скор -> меньше P(faith)
 
     # --- p_rel: логрег на train ---------------------------------------------
     sc_all = StandardScaler().fit(X["train"])
+    if len(np.unique(y_r["train"])) < 2:
+        raise SystemExit("train не содержит обоих классов rel — увеличь --limit или проверь данные")
     lr = LogisticRegression(max_iter=1000, class_weight="balanced")
     lr.fit(sc_all.transform(X["train"]), y_r["train"])
 
@@ -81,9 +86,6 @@ def main():
         save_preds(preds, out_root / f"{s}.jsonl")
         preds_by_split[s] = preds
 
-    # Сохраняем метаданные прогона
-    save_run_yaml(out_root, cfg, split="all", limit=args.limit, method="m6")
-
     # --- отчёт + стратификация по n_clusters --------------------------------
     tf, tr, _ = fit_thresholds(splits["val"], preds_by_split["val"])
     report = evaluate(splits["test"], preds_by_split["test"], tf, tr)
@@ -96,6 +98,9 @@ def main():
     (out_root / "report_test.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
+
+    # Сохраняем метаданные прогона после успешного завершения
+    save_run_yaml(out_root, cfg, split="all", limit=args.limit, method="m6")
 
 
 if __name__ == "__main__":
