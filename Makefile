@@ -1,0 +1,79 @@
+# Quick commands. Everything runs against .venv (create with `make install`).
+
+PY := .venv/bin/python
+DATA ?= data/dummy.jsonl
+MODEL ?= mlx-community/Qwen2.5-1.5B-Instruct-4bit
+
+.PHONY: help install install-mlx test lint check dummy baseline-direct baseline-marker \
+        train-direct train-marker infer-direct infer-marker eval-all clean
+
+help: ## List available targets
+	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
+
+install: ## Create venv and install core + dev deps (uv)
+	uv venv --python 3.12
+	uv pip install -e ".[dev]"
+
+install-mlx: ## Add MLX backend + LoRA training deps (Apple Silicon)
+	uv pip install -e ".[mlx]"
+
+test: ## Run unit tests
+	$(PY) -m pytest -q
+
+lint: ## Ruff lint
+	$(PY) -m ruff check .
+
+check: test lint ## Tests + lint
+
+dummy: ## Smoke-test pipeline without a model (keyword strategy, marker mode)
+	$(PY) scripts/run_prompt_baseline.py --data $(DATA) \
+		--output results/dummy_marker_predictions.jsonl \
+		--mode marker --backend dummy --dummy-strategy keyword
+	$(PY) scripts/evaluate.py --data $(DATA) \
+		--predictions results/dummy_marker_predictions.jsonl \
+		--output results/dummy_marker_metrics.json
+
+baseline-direct: ## Zero-shot MLX baseline, direct mode
+	$(PY) scripts/run_prompt_baseline.py --data $(DATA) \
+		--output results/qwen_direct_predictions.jsonl \
+		--mode direct --backend mlx --model $(MODEL)
+	$(PY) scripts/evaluate.py --data $(DATA) \
+		--predictions results/qwen_direct_predictions.jsonl \
+		--output results/qwen_direct_metrics.json
+
+baseline-marker: ## Zero-shot MLX baseline, marker mode
+	$(PY) scripts/run_prompt_baseline.py --data $(DATA) \
+		--output results/qwen_marker_predictions.jsonl \
+		--mode marker --backend mlx --model $(MODEL)
+	$(PY) scripts/evaluate.py --data $(DATA) \
+		--predictions results/qwen_marker_predictions.jsonl \
+		--output results/qwen_marker_metrics.json
+
+train-direct: ## Prepare direct SFT splits and print the mlx_lm.lora command
+	$(PY) scripts/train_direct_lora.py --data $(DATA)
+
+train-marker: ## Prepare marker SFT splits and print the mlx_lm.lora command
+	$(PY) scripts/train_marker_lora.py --data $(DATA)
+
+infer-direct: ## Inference with the trained direct adapter + evaluation
+	$(PY) scripts/infer.py --data $(DATA) \
+		--output results/direct_lora_predictions.jsonl \
+		--mode direct --adapter-path results/adapters_direct
+	$(PY) scripts/evaluate.py --data $(DATA) \
+		--predictions results/direct_lora_predictions.jsonl \
+		--output results/direct_lora_metrics.json
+
+infer-marker: ## Inference with the trained marker adapter + evaluation
+	$(PY) scripts/infer.py --data $(DATA) \
+		--output results/marker_lora_predictions.jsonl \
+		--mode marker --adapter-path results/adapters_marker
+	$(PY) scripts/evaluate.py --data $(DATA) \
+		--predictions results/marker_lora_predictions.jsonl \
+		--output results/marker_lora_metrics.json
+
+eval-all: ## Print every metrics json in results/
+	@for f in results/*_metrics.json; do echo "== $$f"; cat "$$f"; done
+
+clean: ## Remove tool caches and build artifacts (keeps results/)
+	rm -rf .pytest_cache .ruff_cache .mypy_cache \
+		src/*.egg-info src/rag_reliability/__pycache__ tests/__pycache__
