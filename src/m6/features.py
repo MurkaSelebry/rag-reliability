@@ -4,7 +4,7 @@
   selfcheck_contra_mean / _max — SelfCheckGPT-NLI: средняя/максимальная по
       предложениям ответа вероятность противоречия сэмплам;
   semantic_entropy — энтропия кластеров сэмплов (двунаправленный entailment);
-  n_clusters — число семантических кластеров среди сэмплов;
+  n_clusters — число семантических кластеров среди [ответ] + сэмплы;
   answer_in_top_cluster — принадлежит ли исходный ответ крупнейшему кластеру;
   cos_q_a — косинус эмбеддингов вопроса и ответа (relevance-сигнал).
 
@@ -30,6 +30,8 @@ def sentences(text: str) -> list[str]:
 
 
 def selfcheck_scores(answer: str, samples: list[str], nli) -> dict:
+    if not samples:
+        raise ValueError("пустой список сэмплов — нечего сравнивать")
     sents = sentences(answer)
     pairs = [(smp, sent) for sent in sents for smp in samples]  # premise=сэмпл, hyp=предложение
     res = nli.score(pairs)
@@ -95,7 +97,12 @@ def main():
 
     done = set()
     if out_path.exists():
-        done = {json.loads(l)["id"] for l in open(out_path, encoding="utf-8")}
+        with open(out_path, encoding="utf-8") as f:
+            for l in f:
+                try:
+                    done.add(json.loads(l)["id"])
+                except json.JSONDecodeError:
+                    pass  # усечённая последняя строка от прерванного прогона
 
     with open(out_path, "a", encoding="utf-8") as fout:
         for c in tqdm(cases, desc=f"m6/features/{args.split}"):
