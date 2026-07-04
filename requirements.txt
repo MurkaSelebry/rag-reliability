@@ -10,3 +10,4 @@ tqdm
 razdel
 pytest
 datasets>=2.20
+matplotlib
