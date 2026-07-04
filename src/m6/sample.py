@@ -51,8 +51,13 @@ def main() -> None:
         choices = client.chat(messages, temperature=m6["temperature"],
                               top_p=m6["top_p"], n=m6["n_samples"],
                               max_tokens=m6["max_new_tokens"], case=c)
-        out.write_text(json.dumps({"id": c.id, "samples": [ch["text"] for ch in choices]},
-                                  ensure_ascii=False), encoding="utf-8")
+        if not choices:
+            raise RuntimeError(f"{c.id}: провайдер вернул 0 сэмплов — не кэширую")
+        payload = json.dumps({"id": c.id, "samples": [ch["text"] for ch in choices]},
+                             ensure_ascii=False)
+        tmp = out.with_suffix(".json.tmp")
+        tmp.write_text(payload, encoding="utf-8")
+        tmp.replace(out)  # атомарная замена на POSIX
 
 
 if __name__ == "__main__":
