@@ -66,6 +66,10 @@ def main() -> None:
             d = m["clean"]["p_rel"] - m["off_topic_answer"]["p_rel"]
             print(f"сигнал rel (clean - off_topic):       {d:+.3f} "
                   + ("OK" if d > 0 else "!! нет сигнала"))
+        if {"clean", "incomplete_answer"} <= m.keys():
+            d = m["clean"]["p_faith"] - m["incomplete_answer"]["p_faith"]
+            status = "OK" if d > 0.2 else ("слабый — ожидаемо трудный тип" if d > 0 else "!! нет сигнала")
+            print(f"сигнал faith (clean - incomplete):    {d:+.3f} {status}")
 
     if args.m6_features:
         feats = _load_jsonl(args.m6_features)
@@ -77,6 +81,11 @@ def main() -> None:
             d_c = m["hallucination"]["selfcheck_contra_mean"] - m["clean"]["selfcheck_contra_mean"]
             print(f"сигнал m6 (halluc - clean): entropy {d_se:+.3f}, contra {d_c:+.3f} "
                   + ("OK" if (d_se > 0 or d_c > 0) else "!! нет сигнала"))
+        if {"clean", "incomplete_answer"} <= m.keys():
+            d_c = m["incomplete_answer"]["selfcheck_contra_mean"] - m["clean"]["selfcheck_contra_mean"]
+            d_se = m["incomplete_answer"]["semantic_entropy"] - m["clean"]["semantic_entropy"]
+            print(f"инфо m6 (incomplete - clean): contra {d_c:+.3f}, entropy {d_se:+.3f} "
+                  "(consistency слепа к неполноте — ожидаемо, H4)")
 
 
 if __name__ == "__main__":
