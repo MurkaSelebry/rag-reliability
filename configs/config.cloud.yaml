@@ -29,11 +29,19 @@ data:
 
 m3:
   mode: "zero_shot"
-  gepa_auto: "light"          # в облаке — только light (отладка механики)
-  gepa_train_size: 50
-  use_marker_feedback: true
   seed: 0
-  out_prompt: "artifacts/cloud/m3_optimized_prompt.txt"
+  gepa:
+    train_size: 50            # smoke; боевой прогон этапа — 100 (весь бюджет псевдо-train не нужен)
+    auto: "light"             # medium только по решению пользователя (стоп-правило бюджета)
+    seeds: [0, 1]
+    variants:                 # H5-механика: единственное различие — use_marker_feedback
+      markers: {use_marker_feedback: true,  out_prompt: "artifacts/cloud/m3_prompt_markers_seed{seed}.txt"}
+      plain:   {use_marker_feedback: false, out_prompt: "artifacts/cloud/m3_prompt_plain_seed{seed}.txt"}
+    reflection:
+      model: "qwen/qwen-2.5-72b-instruct"   # OpenRouter; локально заменится на 32B
+      api_base: "https://openrouter.ai/api/v1"
+      max_tokens: 8000
+  out_prompt: "artifacts/cloud/m3_optimized_prompt.txt"   # дефолт mode=gepa без --prompt-file
   out_pred_dir: "predictions/cloud/m3"   # отдельно от боевых predictions!
   judge_cache: "artifacts/cloud/m3_judge_cache"
 
