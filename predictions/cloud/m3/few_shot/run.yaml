@@ -18,7 +18,7 @@ config:
     val: data/processed/pseudo_dev_val.jsonl
     test: data/processed/pseudo_dev_test.jsonl
   m3:
-    mode: zero_shot
+    mode: few_shot
     seed: 0
     gepa:
       train_size: 50
@@ -61,8 +61,8 @@ config:
 git_hash: fa86d4dd8e799a9f38f7a38fefd6e5855b251fe9
 profile: cloud
 seed: 0
-split: test
+split: val
 limit: null
 method: m3
-variant: zero_shot
+variant: few_shot
 prompt_file: null
