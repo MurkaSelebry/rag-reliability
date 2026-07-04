@@ -91,7 +91,8 @@ def load_pairs(source: str, n: int, seed: int) -> list[dict]:
                                                "paragraph": row["context"]})
         pool = list(by_par.values())
     else:
-        pool = [json.loads(l) for l in open(source, encoding="utf-8") if l.strip()]
+        with open(source, encoding="utf-8") as fh:
+            pool = [json.loads(l) for l in fh if l.strip()]
     if len(pool) < n:
         raise SystemExit(f"в источнике {len(pool)} абзацев, нужно {n}")
     return rng.sample(pool, n)
@@ -103,7 +104,10 @@ def generate_case(client: LLMClient, cache: Path, rng: random.Random,
     cid = f"pseudo_{i:05d}"
     cache_file = cache / f"{cid}.json"
     if cache_file.exists():
-        answer = json.loads(cache_file.read_text(encoding="utf-8"))["answer"]
+        cached = json.loads(cache_file.read_text(encoding="utf-8"))
+        if cached.get("kind") != kind:
+            raise ValueError(f"{cid}: кэш kind={cached.get('kind')}, ожидается {kind} — удали кэш")
+        answer = cached["answer"]
     else:
         messages = [{"role": "system", "content": GEN_SYSTEM},
                     {"role": "user", "content": GEN_USER[kind].format(
@@ -111,6 +115,8 @@ def generate_case(client: LLMClient, cache: Path, rng: random.Random,
         # публичные данные (SberQuAD), не корпус кураторов — флаг public_data=True
         answer = client.chat(messages, temperature=0.7, max_tokens=300,
                              public_data=True)[0]["text"].strip()
+        if not answer:
+            raise ValueError(f"{cid}: пустой ответ от модели — не кэширую")
         cache_file.write_text(json.dumps({"id": cid, "kind": kind, "answer": answer},
                                          ensure_ascii=False), encoding="utf-8")
     return {"id": cid, "query": pair["question"],
@@ -130,7 +136,7 @@ def main() -> None:
 
     cfg = load_config(args.config)
     ps = cfg["pseudo"]
-    n = args.n or ps["n"]
+    n = args.n if args.n is not None else ps["n"]
     seed = args.seed if args.seed is not None else ps["seed"]
     source = args.source or ps["source"]
 
