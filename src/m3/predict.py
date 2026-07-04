@@ -50,7 +50,7 @@ def main() -> None:
 
     cases = load_cases(cfg["data"][args.split])
     assert_cloud_safe(cases, profile)          # guard на весь файл до первого запроса
-    if args.limit:
+    if args.limit is not None:
         cases = cases[: args.limit]
 
     client = JudgeClient(cfg, cache_dir=cfg["m3"]["judge_cache"])
@@ -64,16 +64,19 @@ def main() -> None:
                           meta={"mode": cfg["m3"]["mode"], **meta}))
 
     out_dir = Path(cfg["m3"]["out_pred_dir"]) / cfg["m3"]["mode"]
-    save_preds(preds, out_dir / f"{args.split}.jsonl")
+    is_smoke = args.limit is not None
+    fname = f"{args.split}__smoke{args.limit}.jsonl" if is_smoke else f"{args.split}.jsonl"
+    save_preds(preds, out_dir / fname)
     save_run_yaml(out_dir, cfg, seed=cfg["m3"]["seed"], split=args.split,
                   limit=args.limit, method="m3")
 
     # dev-оценка: пороги с val (если val-предсказания уже есть), метрики на текущем сплите
-    if args.split in ("val", "test") and any(c.faith is not None for c in cases):
+    if not is_smoke and args.split in ("val", "test") and any(c.faith is not None for c in cases):
         val_path = out_dir / "val.jsonl"
         if val_path.exists():
             val_cases = load_cases(cfg["data"]["val"])
-            val_preds = [Pred(**json.loads(l)) for l in open(val_path, encoding="utf-8")]
+            with open(val_path, encoding="utf-8") as fh:
+                val_preds = [Pred(**json.loads(l)) for l in fh]
             tf, tr, _ = fit_thresholds(val_cases, val_preds)
             report = evaluate(cases, preds, tf, tr)
             (out_dir / f"report_{args.split}.json").write_text(
