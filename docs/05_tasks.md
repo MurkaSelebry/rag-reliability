@@ -8,6 +8,16 @@
 - [x] tools/make_pseudo_corpus.py по спецификации docs/07.2 (+ ручная проверка 5×4 кейсов)
 - [x] Прогон m3 zero_shot и m6 (20 кейсов) на псевдо-корпусе; проверка сигналов из docs/07.3
 
+## Этап −0.5 — GEPA (cloud; docs/10)
+- [x] configs/few_shot.yaml: 7 примеров с якорями обеих осей (B1/B2); приёмка на val
+      (off_topic p_faith 0.202→0.240 — порог 0.5 не взят, ограничение 7B-судьи; rel-сигнал сохранён)
+- [x] tools/make_figs.py: боксплоты по kind, reliability, f1(t), scatter m6 (+тесты логики)
+- [x] configs/config.cloud.yaml m3.gepa; run_gepa.py (метрика ±markers, глосс из yaml); gepa_report.py; predict --prompt-file/--variant-name
+- [x] GEPA smoke: auto=light, train=50 (checkpoint: ≤ few_shot → medium НЕ запускался, docs/10 §3)
+- [x] H5-механика: gepa_markers/gepa_plain × 2 seed, train=100 auto=light (репетиция механики, не проверка H5)
+- [x] tools/entropy_ablation.py: абляция thr×N из кэша (0 LLM-вызовов); интерпретация в docs/10 §4
+- [x] docs/10_gepa_stage.md — итоговый отчёт этапа
+
 ## Этап 0 — фундамент
 - [ ] Получить сплиты платформы -> data/processed/ ; проверить схему loader-ом
 - [ ] Получить у кураторов словарь 13 маркеров -> configs/markers.yaml
@@ -24,8 +34,8 @@
 - [ ] Прогон zero_shot val+test -> первая строка таблицы
 - [ ] configs/few_shot.yaml: 6–8 примеров с ручным «Анализом»
 - [ ] Прогон few_shot val+test
-- [ ] run_gepa.py: DSPy-программа, метрика с feedback, сохранение промпта и статистики
-- [ ] GEPA smoke: auto=light, train=50
+- [x] run_gepa.py: DSPy-программа, метрика с feedback, сохранение промпта и статистики (cloud; docs/10)
+- [x] GEPA smoke: auto=light, train=50 (cloud; docs/10 §3)
 - [ ] gepa_markers: 2 seed, auto=medium
 - [ ] gepa_plain: те же seed/бюджет (H5)
 - [ ] Инференс gepa-вариантов val+test; контроль зазора val/test
