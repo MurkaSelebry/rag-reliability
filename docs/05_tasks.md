@@ -2,11 +2,11 @@
 
 ## Этап -1 — cloud-режим (пока нет GPU/корпуса; см. docs/07)
 - [x] configs/config.cloud.yaml: профиль OpenRouter (создан; вписать OPENROUTER_API_KEY в окружение)
-- [ ] Поддержка в загрузчике конфига: подстановка ${VAR} и проброс openrouter_extra_body
-- [ ] Smoke-тест logprobs провайдера (top_logprobs на токенах вердикта)
-- [ ] Guard в LLM-клиенте: cloud-профиль + не-synthetic данные = ошибка
-- [ ] tools/make_pseudo_corpus.py по спецификации docs/07.2 (+ ручная проверка 5×4 кейсов)
-- [ ] Прогон m3 zero_shot и m6 (20 кейсов) на псевдо-корпусе; проверка сигналов из docs/07.3
+- [x] Поддержка в загрузчике конфига: подстановка ${VAR} и проброс openrouter_extra_body
+- [x] Smoke-тест logprobs провайдера (top_logprobs на токенах вердикта)
+- [x] Guard в LLM-клиенте: cloud-профиль + не-synthetic данные = ошибка
+- [x] tools/make_pseudo_corpus.py по спецификации docs/07.2 (+ ручная проверка 5×4 кейсов)
+- [x] Прогон m3 zero_shot и m6 (20 кейсов) на псевдо-корпусе; проверка сигналов из docs/07.3
 
 ## Этап 0 — фундамент
 - [ ] Получить сплиты платформы -> data/processed/ ; проверить схему loader-ом
