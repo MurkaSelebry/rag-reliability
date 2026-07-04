@@ -21,6 +21,7 @@ m3:
   seed: 0
   out_prompt: "artifacts/m3_optimized_prompt.txt"
   out_pred_dir: "predictions/m3"
+  judge_cache: "artifacts/m3_judge_cache"
 
 m6:
   n_samples: 10
