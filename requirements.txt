@@ -11,3 +11,9 @@ razdel
 pytest
 datasets>=2.20
 matplotlib
+# viz & scale (этап −0.25) — всё локальное
+plotly
+streamlit
+mlflow
+dvc
+pandas
