@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG-reliability — дашборд результатов (m3/m6, cloud-этапы)</title>
+<style>
+  .viz-root {
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-val:     #2a78d6;   /* categorical slot 1 (blue)  — val  */
+    --series-test:    #1baf7a;   /* categorical slot 2 (aqua)  — test */
+    --warn-bg:        #fdf6e3;
+    --warn-ink:       #7a5b00;
+    --div-mid:        #f0efec;   /* нейтральный midpoint диверг. шкалы */
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text-primary);
+         font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 19px; margin: 40px 0 12px; }
+  .sub { color: var(--text-secondary); margin: 0 0 18px; }
+  .banner { background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px 16px; margin: 18px 0 26px; font-size: 14px; }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+          padding: 18px 20px; }
+  /* KPI-плитки */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .tile .label { color: var(--text-secondary); font-size: 13px; margin-bottom: 6px; }
+  .tile .value { font-size: 34px; font-weight: 650; letter-spacing: -0.01em; }
+  .tile .note  { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; }
+  /* Grouped bar (HTML/CSS): тонкие марки, скруглённый data-end, 2px зазор */
+  .barchart { display: grid; grid-template-columns: 170px 1fr; row-gap: 14px; align-items: center; }
+  .bar-name { font-size: 13.5px; color: var(--text-secondary); text-align: right;
+              padding-right: 12px; white-space: nowrap; }
+  .bar-pair { border-left: 2px solid var(--baseline); padding-left: 0; }
+  .bar-row  { display: flex; align-items: center; height: 16px; margin: 2px 0; }
+  .bar { height: 12px; border-radius: 0 4px 4px 0; }
+  .bar.val  { background: var(--series-val); }
+  .bar.test { background: var(--series-test); }
+  .bar-lbl { font-size: 12.5px; color: var(--text-primary); padding-left: 8px;
+             font-variant-numeric: tabular-nums; }
+  .flag { display: inline-block; background: var(--warn-bg); color: var(--warn-ink);
+          border-radius: 6px; font-size: 11.5px; padding: 1px 7px; margin-left: 8px; }
+  .legend { display: flex; gap: 18px; margin: 4px 0 14px; font-size: 13px; color: var(--text-secondary); }
+  .legend .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px;
+                margin-right: 6px; vertical-align: -1px; }
+  /* Таблицы */
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th { text-align: left; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--grid);
+       padding: 6px 10px; }
+  td { border-bottom: 1px solid var(--grid); padding: 6px 10px; font-variant-numeric: tabular-nums; }
+  td.num, th.num { text-align: right; }
+  /* Абляция: диверг. заливка + видимые значения */
+  .abl td.cell { text-align: center; border-radius: 6px; border: 2px solid var(--surface-1); }
+  /* Галереи */
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .shot { display: block; background: var(--surface-1); border: 1px solid var(--border);
+          border-radius: 10px; overflow: hidden; text-decoration: none; color: inherit; }
+  .shot img { width: 100%; display: block; border-bottom: 1px solid var(--grid); }
+  .shot .cap { padding: 8px 12px; font-size: 13px; color: var(--text-secondary); }
+  iframe { width: 100%; height: 860px; border: 1px solid var(--border); border-radius: 12px;
+           background: #fff; }
+  a { color: var(--series-val); }
+  footer { margin-top: 42px; color: var(--text-muted); font-size: 12.5px; }
+</style>
+</head>
+<body class="viz-root"><div class="wrap">
+
+<h1>RAG-reliability — дашборд результатов</h1>
+<p class="sub">Методы 3 (LLM-as-judge + GEPA) и 6 (SelfCheck + entropy) · cloud-этапы −1 … −0.25 · SMILES × Alfa Bank</p>
+
+<div class="banner">⚠️ <b>Синтетические данные.</b> Все числа — псевдо-корпус (SberQuAD, 300 кейсов), отладочные:
+гипотез не доказывают, H5 не проверяется (маркеры детерминированы типом кейса). Финальные числа — только
+local-этап на корпусе кураторов.</div>
+
+<!-- ============ KPI ============ -->
+<div class="tiles">
+  <div class="card tile">
+    <div class="label">Лучший вариант m3 (val)</div>
+    <div class="value">0.824</div>
+    <div class="note">f1_reliable · few_shot (zero_shot: 0.792)</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Он же на test</div>
+    <div class="value">0.691</div>
+    <div class="note">зазор val−test +0.132</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Δ GEPA markers − plain</div>
+    <div class="value">+0.035</div>
+    <div class="note">val; на test −0.005 — на синтетике выигрыш не удерживается</div>
+  </div>
+  <div class="card tile">
+    <div class="label">Извлечение вердиктов</div>
+    <div class="value">100%</div>
+    <div class="note">logprobs (420 predictions, fallback не понадобился)</div>
+  </div>
+</div>
+
+<!-- ============ Лидерборд ============ -->
+<h2>f1_reliable по вариантам — val vs test</h2>
+<div class="card">
+  <div class="legend">
+    <span><span class="sw" style="background:var(--series-val)"></span>val</span>
+    <span><span class="sw" style="background:var(--series-test)"></span>test</span>
+  </div>
+  <div class="barchart">
+    <div class="bar-name">few_shot</div>
+    <div class="bar-pair">
+      <div class="bar-row" title="few_shot · val 0.824"><div class="bar val" style="width:82.4%"></div><span class="bar-lbl">0.824</span></div>
+      <div class="bar-row" title="few_shot · test 0.691"><div class="bar test" style="width:69.1%"></div><span class="bar-lbl">0.691</span></div>
+    </div>
+    <div class="bar-name">gepa_markers_s1</div>
+    <div class="bar-pair">
+      <div class="bar-row" title="gepa_markers_s1 · val 0.824"><div class="bar val" style="width:82.4%"></div><span class="bar-lbl">0.824<span class="flag">⚠ переобучение: gap +0.240</span></span></div>
+      <div class="bar-row" title="gepa_markers_s1 · test 0.583"><div class="bar test" style="width:58.3%"></div><span class="bar-lbl">0.583</span></div>
+    </div>
+    <div class="bar-name">zero_shot</div>
+    <div class="bar-pair">
+      <div class="bar-row" title="zero_shot · val 0.792"><div class="bar val" style="width:79.2%"></div><span class="bar-lbl">0.792</span></div>
+      <div class="bar-row" title="zero_shot · test 0.661"><div class="bar test" style="width:66.1%"></div><span class="bar-lbl">0.661</span></div>
+    </div>
+    <div class="bar-name">gepa_plain_s1</div>
+    <div class="bar-pair">
+      <div class="bar-row" title="gepa_plain_s1 · val 0.760"><div class="bar val" style="width:76.0%"></div><span class="bar-lbl">0.760</span></div>
+      <div class="bar-row" title="gepa_plain_s1 · test 0.697"><div class="bar test" style="width:69.7%"></div><span class="bar-lbl">0.697</span></div>
+    </div>
+    <div class="bar-name">gepa_markers_s0</div>
+    <div class="bar-pair">
+      <div class="bar-row" title="gepa_markers_s0 · val 0.729"><div class="bar val" style="width:72.9%"></div><span class="bar-lbl">0.729</span></div>
+      <div class="bar-row" title="gepa_markers_s0 · test 0.764"><div class="bar test" style="width:76.4%"></div><span class="bar-lbl">0.764</span></div>
+    </div>
+    <div class="bar-name">gepa_plain_s0</div>
+    <div class="bar-pair">
+      <div class="bar-row" title="gepa_plain_s0 · val 0.722"><div class="bar val" style="width:72.2%"></div><span class="bar-lbl">0.722</span></div>
+      <div class="bar-row" title="gepa_plain_s0 · test 0.661"><div class="bar test" style="width:66.1%"></div><span class="bar-lbl">0.661</span></div>
+    </div>
+  </div>
+  <table style="margin-top:18px">
+    <tr><th>вариант</th><th class="num">val</th><th class="num">test</th><th class="num">gap val−test</th></tr>
+    <tr><td>few_shot</td><td class="num">0.824</td><td class="num">0.691</td><td class="num">+0.132</td></tr>
+    <tr><td>gepa_markers_s1</td><td class="num">0.824</td><td class="num">0.583</td><td class="num">+0.240 ⚠</td></tr>
+    <tr><td>zero_shot</td><td class="num">0.792</td><td class="num">0.661</td><td class="num">+0.131</td></tr>
+    <tr><td>gepa_plain_s1</td><td class="num">0.760</td><td class="num">0.697</td><td class="num">+0.063</td></tr>
+    <tr><td>gepa_markers_s0</td><td class="num">0.729</td><td class="num">0.764</td><td class="num">−0.036</td></tr>
+    <tr><td>gepa_plain_s0</td><td class="num">0.722</td><td class="num">0.661</td><td class="num">+0.062</td></tr>
+  </table>
+</div>
+
+<!-- ============ Интерактивный отчёт ============ -->
+<h2>Интерактивный отчёт (plotly)</h2>
+<p class="sub">11 секций: боксплоты по kind, heatmap осей, калибровка, f1(t), confusion, GEPA-эволюция, m6.
+<a href="report.html" target="_blank">Открыть в отдельной вкладке ↗</a></p>
+<iframe src="report.html" title="Интерактивный отчёт" loading="lazy"></iframe>
+
+<!-- ============ GEPA ============ -->
+<h2>GEPA — прогоны и бюджеты (light, train=100)</h2>
+<div class="card">
+  <table>
+    <tr><th>вариант</th><th class="num">seed</th><th class="num">лучший val-score</th>
+        <th class="num">кандидатов</th><th class="num">вызовы 7B</th><th class="num">вызовы 72B</th><th>эволюция</th></tr>
+    <tr><td>markers</td><td class="num">0</td><td class="num">0.717</td><td class="num">8</td><td class="num">596</td><td class="num">20</td><td><a href="gepa/m3_gepa_report_markers_seed0.md">отчёт</a></td></tr>
+    <tr><td>markers</td><td class="num">1</td><td class="num">0.733</td><td class="num">5</td><td class="num">501</td><td class="num">21</td><td><a href="gepa/m3_gepa_report_markers_seed1.md">отчёт</a></td></tr>
+    <tr><td>plain</td><td class="num">0</td><td class="num">0.717</td><td class="num">11</td><td class="num">501</td><td class="num">20</td><td><a href="gepa/m3_gepa_report_plain_seed0.md">отчёт</a></td></tr>
+    <tr><td>plain</td><td class="num">1</td><td class="num">0.733</td><td class="num">7</td><td class="num">501</td><td class="num">25</td><td><a href="gepa/m3_gepa_report_plain_seed1.md">отчёт</a></td></tr>
+  </table>
+</div>
+
+<!-- ============ Абляция ============ -->
+<h2>m6 — абляция энтропии: Δ(hallucination − clean) по порогу × N</h2>
+<p class="sub">Диверг. шкала: <span style="color:#1c5cab">синий</span> — Δ&gt;0 (ожидаемый сигнал),
+<span style="color:#b23230">красный</span> — инверсия; серый — около нуля. Знак немонотонен по N —
+энтропия ненадёжна, faith-сигнал m6 строится на contradiction.</p>
+<div class="card" style="max-width:560px">
+  <table class="abl">
+    <tr><th>thr \ N</th><th class="num">3</th><th class="num">5</th><th class="num">10</th></tr>
+    <tr><td>0.30</td>
+      <td class="cell" style="background:#9ec5f4">+0.229</td>
+      <td class="cell" style="background:#cde2fb">+0.065</td>
+      <td class="cell" style="background:#6da7ec">+0.441</td></tr>
+    <tr><td>0.40</td>
+      <td class="cell" style="background:#6da7ec">+0.416</td>
+      <td class="cell" style="background:var(--div-mid)">+0.017</td>
+      <td class="cell" style="background:#86b6ef">+0.343</td></tr>
+    <tr><td>0.50</td>
+      <td class="cell" style="background:#86b6ef">+0.335</td>
+      <td class="cell" style="background:#f5d3d2">−0.064</td>
+      <td class="cell" style="background:#9ec5f4">+0.249</td></tr>
+  </table>
+</div>
+
+<!-- ============ Статичные фигуры ============ -->
+<h2>Статичные фигуры (make_figs, few_shot val)</h2>
+<div class="gallery">
+  <a class="shot" href="figs/m3_box_p_faith.png" target="_blank"><img src="figs/m3_box_p_faith.png" alt="боксплот p_faith по kind"><span class="cap">p_faith по типам кейсов — off_topic низкий (ограничение 7B-судьи)</span></a>
+  <a class="shot" href="figs/m3_box_p_rel.png" target="_blank"><img src="figs/m3_box_p_rel.png" alt="боксплот p_rel по kind"><span class="cap">p_rel по типам кейсов — rel-сигнал разведён</span></a>
+  <a class="shot" href="figs/m3_reliability_faith.png" target="_blank"><img src="figs/m3_reliability_faith.png" alt="калибровка"><span class="cap">Калибровочная диаграмма судьи (faith)</span></a>
+  <a class="shot" href="figs/m3_f1_curve.png" target="_blank"><img src="figs/m3_f1_curve.png" alt="f1(t)"><span class="cap">f1(t) по обеим осям</span></a>
+  <a class="shot" href="figs/m6_scatter.png" target="_blank"><img src="figs/m6_scatter.png" alt="m6 scatter"><span class="cap">m6: contradiction × entropy (размер = n_clusters)</span></a>
+</div>
+
+<!-- ============ Эксплорер ============ -->
+<h2>Streamlit-эксплорер (скриншоты 4 страниц)</h2>
+<p class="sub">Живой запуск: <code>streamlit run tools/explorer.py</code> из репозитория.</p>
+<div class="gallery">
+  <a class="shot" href="figs/explorer_cases.png" target="_blank"><img src="figs/explorer_cases.png" alt="Кейсы"><span class="cap">Кейсы — фильтры, вердикты всех вариантов, raw-вывод судьи</span></a>
+  <a class="shot" href="figs/explorer_disagreements.png" target="_blank"><img src="figs/explorer_disagreements.png" alt="Разногласия"><span class="cap">Разногласия — где варианты разошлись (|Δp|)</span></a>
+  <a class="shot" href="figs/explorer_m6.png" target="_blank"><img src="figs/explorer_m6.png" alt="m6"><span class="cap">m6 — сэмплы кейса бок о бок + фичи</span></a>
+  <a class="shot" href="figs/explorer_gepa.png" target="_blank"><img src="figs/explorer_gepa.png" alt="GEPA"><span class="cap">GEPA-промпты — кандидаты и diff против SEED_INSTRUCTION</span></a>
+</div>
+
+<footer>
+  Этапы −1 … −0.25 · profile: cloud (OpenRouter/Phala, qwen-2.5-7b) · подробности: docs/08–11 в репозитории ·
+  сгенерировано из predictions/artifacts ветки m3-m6
+</footer>
+
+</div></body>
+</html>
