@@ -1,12 +1,21 @@
 # Architecture
 
-The pipeline is a straight line; every experiment (dummy, zero-shot, LoRA)
-walks the same five steps, so results are always comparable:
+The prompt-based pipeline is a straight line; every dummy, zero-shot, and LoRA
+judge experiment walks the same five steps, so results are comparable:
 
 ```
 data (jsonl) ──► prompt formatting ──► inference ──► parsing ──► evaluation
   dataset.py       prompts.py         scripts/      parsing.py   metrics.py
                    formatting.py
+```
+
+The LettuceDetect method shares the same `RagSample` input and `Prediction`
+output contracts, but replaces prompt generation/parsing with feature
+extraction and a classifier:
+
+```
+data (jsonl) ──► feature extraction ──► classifier ──► evaluation
+  dataset.py       methods/lettucedetect  Prediction    metrics.py
 ```
 
 ## Modules (`src/rag_reliability/`)
@@ -20,6 +29,8 @@ data (jsonl) ──► prompt formatting ──► inference ──► parsing �
 | `metrics.py` | Macro-F1 for reliable/faithfulness/relevance; marker F1 + confusion (marker mode only). Joins predictions to samples by `id`, raises on missing ids. |
 | `dataset.py` | JSONL IO, stratified 80/10/10 split by `reliable` (seed=42), training-file writer. |
 | `dummy_model.py` | Deterministic pseudo-LLMs so the whole pipeline runs without a model (see [experiments.md](experiments.md)). |
+| `methods/lettucedetect/features.py` | LettuceDetect detector setup, token-score aggregation, feature extraction. |
+| `methods/lettucedetect/classifier.py` | sklearn classifier helpers and conversion to `Prediction`. |
 
 ## Scripts (`scripts/`)
 
@@ -27,11 +38,13 @@ data (jsonl) ──► prompt formatting ──► inference ──► parsing �
 |---|---|
 | `run_prompt_baseline.py` | Zero-shot judge over a dataset; `--backend dummy` or `--backend mlx`. |
 | `infer.py` | Same as the mlx baseline but loads a trained LoRA adapter (`--adapter-path`). Output format is identical, so `evaluate.py` works for both. |
+| `infer_lettucedetect.py` | Runs a trained LettuceDetect logistic-regression classifier and writes standard predictions. |
 | `evaluate.py` | Predictions + gold → metrics json. |
 | `train_direct_lora.py` / `train_marker_lora.py` | Prepare SFT splits and print the exact `mlx_lm.lora` command (they do not train themselves). |
+| `train_lettucedetect.py` | Extracts LettuceDetect features and trains the logistic-regression classifier. |
 | `prepare_data.py` | Raw dataset → `RagSample` jsonl (see [data.md](data.md)). |
 
-## Two judge methods
+## Methods
 
 - **Method 1 — direct** (`mode=direct`): model outputs
   `{"faithfulness": 0|1, "relevance": 0|1}`.
@@ -39,12 +52,17 @@ data (jsonl) ──► prompt formatting ──► inference ──► parsing �
   then the labels: `{"marker": "...", "faithfulness": 0|1, "relevance": 0|1}`.
   Hypothesis: forcing an error-type decision improves label quality and gives
   diagnosable failure categories for free.
+- **Method 3 — LettuceDetect features**: LettuceDetect produces token-level
+  unsupported probabilities over the answer; `max`, `mean`, and fraction above
+  threshold are fed into a multi-output logistic regression for faithfulness
+  and relevance.
 
 ## Design decisions
 
 - **Conservative parsing.** An unparseable output counts as
   `faithfulness=0, relevance=0` and increments `invalid_output_rate`. A judge
-  that produces garbage must not look reliable.
+  that produces garbage must not look reliable. This applies to prompt-based
+  methods; LettuceDetect writes structured `Prediction` objects directly.
 - **Chat template symmetry.** Both training (`mlx_lm` `CompletionsDataset`
   applies the tokenizer chat template to prompt/completion pairs) and
   inference (`apply_chat_template` in the scripts) wrap prompts identically —

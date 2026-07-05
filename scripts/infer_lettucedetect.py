@@ -4,16 +4,17 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import joblib
 
-from _bootstrap import REPO_ROOT, add_repo_src_to_path
-
-add_repo_src_to_path()
-
-from classifier import predictions_from_outputs
-from features import FeatureConfig, extract_features, make_detector
 from rag_reliability.dataset import load_jsonl, save_jsonl
+from rag_reliability.methods.lettucedetect.classifier import predictions_from_outputs
+from rag_reliability.methods.lettucedetect.features import (
+    FeatureConfig,
+    extract_features,
+    make_detector,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,7 +39,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    artifact = joblib.load(REPO_ROOT / args.model)
+    artifact = joblib.load(args.model)
     pipeline = artifact["pipeline"]
     saved_config = artifact.get("feature_config", {})
     config = FeatureConfig(
@@ -49,7 +50,7 @@ def main() -> None:
         device=args.device if args.device is not None else saved_config.get("device"),
     )
 
-    samples = load_jsonl(REPO_ROOT / args.data)
+    samples = load_jsonl(args.data)
     print(f"Loaded {len(samples)} sample(s) from {args.data}")
 
     detector = make_detector(config)
@@ -57,7 +58,7 @@ def main() -> None:
     pred_y = pipeline.predict(features)
     predictions = predictions_from_outputs(samples, pred_y, features)
 
-    output = REPO_ROOT / args.output
+    output = Path(args.output)
     save_jsonl(predictions, output)
     print(f"Wrote {len(predictions)} predictions to {output}")
 

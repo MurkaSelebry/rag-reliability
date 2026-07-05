@@ -4,8 +4,9 @@ PY := .venv/bin/python
 DATA ?= data/dummy.jsonl
 MODEL ?= mlx-community/Qwen2.5-1.5B-Instruct-4bit
 
-.PHONY: help install install-mlx test lint check dummy baseline-direct baseline-marker \
-        train-direct train-marker infer-direct infer-marker eval-all clean
+.PHONY: help install install-mlx install-lettucedetect test lint check dummy \
+        baseline-direct baseline-marker train-direct train-marker train-lettucedetect \
+        infer-direct infer-marker infer-lettucedetect eval-all clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -16,6 +17,9 @@ install: ## Create venv and install core + dev deps (uv)
 
 install-mlx: ## Add MLX backend + LoRA training deps (Apple Silicon)
 	uv pip install -e ".[mlx]"
+
+install-lettucedetect: ## Add LettuceDetect feature-classifier deps
+	uv pip install -e ".[lettucedetect]"
 
 test: ## Run unit tests
 	$(PY) -m pytest -q
@@ -55,6 +59,9 @@ train-direct: ## Prepare direct SFT splits and print the mlx_lm.lora command
 train-marker: ## Prepare marker SFT splits and print the mlx_lm.lora command
 	$(PY) scripts/train_marker_lora.py --data $(DATA)
 
+train-lettucedetect: ## Train LettuceDetect feature classifier
+	$(PY) scripts/train_lettucedetect.py --data $(DATA)
+
 infer-direct: ## Inference with the trained direct adapter + evaluation
 	$(PY) scripts/infer.py --data $(DATA) \
 		--output results/direct_lora_predictions.jsonl \
@@ -70,6 +77,14 @@ infer-marker: ## Inference with the trained marker adapter + evaluation
 	$(PY) scripts/evaluate.py --data $(DATA) \
 		--predictions results/marker_lora_predictions.jsonl \
 		--output results/marker_lora_metrics.json
+
+infer-lettucedetect: ## Inference with LettuceDetect classifier + evaluation
+	$(PY) scripts/infer_lettucedetect.py --data $(DATA) \
+		--model results/lettucedetect/classifier.joblib \
+		--output results/lettucedetect/predictions.jsonl
+	$(PY) scripts/evaluate.py --data $(DATA) \
+		--predictions results/lettucedetect/predictions.jsonl \
+		--output results/lettucedetect/metrics.json
 
 eval-all: ## Print every metrics json in results/
 	@for f in results/*_metrics.json; do echo "== $$f"; cat "$$f"; done

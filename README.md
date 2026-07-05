@@ -1,16 +1,18 @@
 # rag-reliability-judge
 
 Part of the team project **"Assessing the Reliability of Responses in RAG
-Systems"** @SMILES-2026. A local instruct LLM acts as a judge: given `QUESTION`, `CONTEXT`,
-`ANSWER` it predicts whether the answer is reliable
-(`reliable = faithfulness AND relevance`).
+Systems"** @SMILES-2026. Given `QUESTION`, `CONTEXT`, `ANSWER`, the methods
+predict whether the answer is reliable (`reliable = faithfulness AND relevance`).
 
-Two fine-tuned methods are compared:
+Three methods are compared:
 
 - **Method 1 — direct** (`mode=direct`): the model outputs
   `{"faithfulness": 0|1, "relevance": 0|1}`.
 - **Method 2 — marker** (`mode=marker`): the model additionally names the
   error type first: `{"marker": "...", "faithfulness": 0|1, "relevance": 0|1}`.
+- **Method 3 — LettuceDetect features**: LettuceDetect token-level scores are
+  aggregated into three features, then a logistic regression predicts
+  faithfulness and relevance.
 
 ## Documentation map
 
@@ -19,6 +21,7 @@ Two fine-tuned methods are compared:
 | [docs/architecture.md](docs/architecture.md) | Pipeline, module map, design decisions (conservative parsing, chat-template symmetry, 4-bit model, dependency pins) |
 | [docs/data.md](docs/data.md) | Sample schema, marker vocabulary, dummy dataset, plugging in the real dataset |
 | [docs/training.md](docs/training.md) | LoRA workflow, configs, why `--mask-prompt`, scaling up |
+| [docs/lettucedetect.md](docs/lettucedetect.md) | LettuceDetect feature extraction + logistic regression |
 | [docs/experiments.md](docs/experiments.md) | All results so far, how to reproduce, environment gotchas |
 
 ## Quickstart
@@ -29,7 +32,8 @@ except the `mlx` backend runs anywhere.
 ```bash
 make install                    # uv venv + core/dev deps
 make install-mlx                # optional, Apple Silicon: mlx backend + LoRA
-make check                      # tests (35, no MLX required) + lint
+uv pip install -e ".[lettucedetect]"  # optional: LettuceDetect feature method
+make check                      # tests (37, no MLX required) + lint
 make help                       # all shortcuts: dummy, baselines, LoRA, eval
 ```
 
@@ -58,7 +62,8 @@ python scripts/run_prompt_baseline.py \
   --mode direct --backend mlx
 ```
 
-LoRA fine-tuning: see [docs/training.md](docs/training.md).
+LoRA fine-tuning: see [docs/training.md](docs/training.md). LettuceDetect
+feature-classifier training: see [docs/lettucedetect.md](docs/lettucedetect.md).
 
 ## Metrics
 
@@ -89,9 +94,9 @@ Current best on dummy data: zero-shot direct `reliable_f1 = 0.86`
 data/dummy.jsonl        36 synthetic Russian banking RAG examples
 configs/                LoRA training configs (direct, marker)
 src/rag_reliability/    schema, prompts, formatting, parsing, metrics,
-                        dataset IO, dummy predictors, mlx backend
+                        dataset IO, dummy predictors, mlx backend, methods
 scripts/                CLI entry points — run from repo root
-tests/                  unit tests (35, no MLX required)
+tests/                  unit tests (37, no MLX required)
 docs/                   architecture / data / training / experiments
 results/                predictions, metrics, adapters (gitignored)
 ```

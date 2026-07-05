@@ -33,7 +33,7 @@ def make_detector(config: FeatureConfig):
     except ImportError as exc:
         raise ImportError(
             "LettuceDetect dependencies are not installed. Run: "
-            "uv pip install -r lettucedetect_method/requirements.txt"
+            'uv pip install -e ".[lettucedetect]"'
         ) from exc
 
     device = config.device or ("cuda" if torch.cuda.is_available() else "cpu")

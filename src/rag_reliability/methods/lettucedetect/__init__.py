@@ -1,0 +1,1 @@
+"""LettuceDetect feature-extractor method."""

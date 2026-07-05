@@ -4,17 +4,21 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import joblib
 from sklearn.metrics import f1_score
 
-from _bootstrap import REPO_ROOT, add_repo_src_to_path
-
-add_repo_src_to_path()
-
-from classifier import targets_from_samples, train_feature_classifier
-from features import FeatureConfig, extract_features, make_detector
 from rag_reliability.dataset import load_jsonl, split_samples
+from rag_reliability.methods.lettucedetect.classifier import (
+    targets_from_samples,
+    train_feature_classifier,
+)
+from rag_reliability.methods.lettucedetect.features import (
+    FeatureConfig,
+    extract_features,
+    make_detector,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,7 +42,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    samples = load_jsonl(REPO_ROOT / args.data)
+    samples = load_jsonl(args.data)
     train, val, test = split_samples(
         samples,
         train_ratio=args.train_ratio,
@@ -74,7 +78,7 @@ def main() -> None:
             f"relevance={relevance_f1:.4f}"
         )
 
-    output = REPO_ROOT / args.output
+    output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(
         {
