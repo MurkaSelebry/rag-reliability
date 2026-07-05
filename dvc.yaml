@@ -1,0 +1,75 @@
+# DAG прогонов (cloud-профиль). Дешёвые стейджи + отчёт; GEPA-прогоны в DAG
+# НЕ включены (дорогие, ручной запуск по стоп-правилам docs/10) — их выходы
+# подхватывает report через deps на predictions/.
+#
+# Данные версионируются как кэшируемый out стейджа pseudo (dvc.lock + локальный
+# remote /tmp/dvc-rag-m3m6 — плейсхолдер до решения команды).
+# predictions/ сознательно cache: false — они коммитятся в git (контракт платформы).
+#
+# Первичная фиксация без перезапуска: `dvc commit -f` (скрипты идемпотентны, кэши свои).
+stages:
+  pseudo:
+    cmd: python -m tools.make_pseudo_corpus --config configs/config.cloud.yaml
+    deps:
+      - tools/make_pseudo_corpus.py
+      - configs/config.cloud.yaml
+    outs:
+      - data/processed/pseudo_dev_train.jsonl
+      - data/processed/pseudo_dev_val.jsonl
+      - data/processed/pseudo_dev_test.jsonl
+
+  m3_zero_shot:
+    cmd: >-
+      python -m src.m3.predict --config configs/config.cloud.yaml --mode zero_shot --split val &&
+      python -m src.m3.predict --config configs/config.cloud.yaml --mode zero_shot --split test
+    deps:
+      - src/m3/predict.py
+      - src/m3/prompts.py
+      - src/common
+      - configs/config.cloud.yaml
+      - data/processed/pseudo_dev_val.jsonl
+      - data/processed/pseudo_dev_test.jsonl
+    outs:
+      - predictions/cloud/m3/zero_shot:
+          cache: false
+
+  m3_few_shot:
+    cmd: >-
+      python -m src.m3.predict --config configs/config.cloud.yaml --mode few_shot --split val &&
+      python -m src.m3.predict --config configs/config.cloud.yaml --mode few_shot --split test
+    deps:
+      - src/m3/predict.py
+      - src/m3/prompts.py
+      - src/common
+      - configs/config.cloud.yaml
+      - configs/few_shot.yaml
+      - data/processed/pseudo_dev_val.jsonl
+      - data/processed/pseudo_dev_test.jsonl
+    outs:
+      - predictions/cloud/m3/few_shot:
+          cache: false
+
+  m6:
+    cmd: >-
+      python -m src.m6.sample --config configs/config.cloud.yaml --split val &&
+      python -m src.m6.features --config configs/config.cloud.yaml --split val
+    deps:
+      - src/m6/sample.py
+      - src/m6/features.py
+      - src/m6/nli.py
+      - configs/config.cloud.yaml
+      - data/processed/pseudo_dev_val.jsonl
+    outs:
+      - artifacts/cloud/m6_features/val.jsonl:
+          cache: false
+
+  report:
+    cmd: python -m tools.make_report --root . --out artifacts/report/index.html
+    deps:
+      - tools/make_report.py
+      - src/common/results_index.py
+      - predictions/cloud
+      - artifacts/cloud/m6_features/val.jsonl
+    outs:
+      - artifacts/report/index.html:
+          cache: false
