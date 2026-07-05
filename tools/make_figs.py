@@ -7,6 +7,7 @@
       --m3-pred predictions/cloud/m3/few_shot/val.jsonl \
       --m6-features artifacts/cloud/m6_features/val.jsonl
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,19 +30,25 @@ def reliability_bins(probs: list[float], labels: list[int], n_bins: int = 10) ->
     bins: list[dict] = []
     for k in range(n_bins):
         lo, hi = k / n_bins, (k + 1) / n_bins
-        sel = [(p, y) for p, y in zip(probs, labels)
-               if lo <= p < hi or (k == n_bins - 1 and p == hi)]
+        sel = [
+            (p, y) for p, y in zip(probs, labels) if lo <= p < hi or (k == n_bins - 1 and p == hi)
+        ]
         n = len(sel)
-        bins.append({
-            "lo": lo, "hi": hi, "n": n,
-            "mean_prob": sum(p for p, _ in sel) / n if n else 0.0,
-            "frac_pos": sum(y for _, y in sel) / n if n else 0.0,
-        })
+        bins.append(
+            {
+                "lo": lo,
+                "hi": hi,
+                "n": n,
+                "mean_prob": sum(p for p, _ in sel) / n if n else 0.0,
+                "frac_pos": sum(y for _, y in sel) / n if n else 0.0,
+            }
+        )
     return bins
 
 
-def f1_threshold_curve(probs: list[float], labels: list[int],
-                       step: float = 0.05) -> tuple[list[float], list[float]]:
+def f1_threshold_curve(
+    probs: list[float], labels: list[int], step: float = 0.05
+) -> tuple[list[float], list[float]]:
     """f1-macro бинаризации p >= t по сетке порогов (та же сетка, что в eval_local)."""
     ts = [float(t) for t in np.arange(step, 1.0, step)]
     y = np.asarray(labels)
@@ -74,6 +81,7 @@ def main() -> None:
     args = ap.parse_args()
 
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -107,11 +115,17 @@ def main() -> None:
     filled = [b for b in bins if b["n"] > 0]
     fig, ax = plt.subplots(figsize=(6, 6))
     ax.plot([0, 1], [0, 1], "--", color="gray", label="идеальная калибровка")
-    ax.plot([b["mean_prob"] for b in filled], [b["frac_pos"] for b in filled],
-            "o-", label="p_faith")
+    ax.plot(
+        [b["mean_prob"] for b in filled], [b["frac_pos"] for b in filled], "o-", label="p_faith"
+    )
     for b in filled:
-        ax.annotate(str(b["n"]), (b["mean_prob"], b["frac_pos"]), fontsize=7,
-                    xytext=(4, 4), textcoords="offset points")
+        ax.annotate(
+            str(b["n"]),
+            (b["mean_prob"], b["frac_pos"]),
+            fontsize=7,
+            xytext=(4, 4),
+            textcoords="offset points",
+        )
     ax.set_xlabel("средняя предсказанная p_faith (бин)")
     ax.set_ylabel("доля y_faith=1 (бин)")
     ax.set_title(f"m3 reliability diagram (faith)\n{title_tag}", fontsize=9)
@@ -124,8 +138,7 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(7, 5))
     for field, y_map in (("p_faith", y_faith), ("p_rel", y_rel)):
         ids = [cid for cid in preds if cid in y_map]
-        ts, f1s = f1_threshold_curve([preds[c][field] for c in ids],
-                                     [y_map[c] for c in ids])
+        ts, f1s = f1_threshold_curve([preds[c][field] for c in ids], [y_map[c] for c in ids])
         ax.plot(ts, f1s, label=field)
     ax.set_xlabel("порог t")
     ax.set_ylabel("f1-macro")
@@ -140,17 +153,18 @@ def main() -> None:
         feats = _load_jsonl(args.m6_features)
         fig, ax = plt.subplots(figsize=(7, 6))
         for kind in KIND_ORDER:
-            xs = [d["selfcheck_contra_mean"] for cid, d in feats.items()
-                  if kind_of.get(cid) == kind]
-            ys = [d["semantic_entropy"] for cid, d in feats.items()
-                  if kind_of.get(cid) == kind]
-            ss = [20 + 20 * d["n_clusters"] for cid, d in feats.items()
-                  if kind_of.get(cid) == kind]
+            xs = [
+                d["selfcheck_contra_mean"] for cid, d in feats.items() if kind_of.get(cid) == kind
+            ]
+            ys = [d["semantic_entropy"] for cid, d in feats.items() if kind_of.get(cid) == kind]
+            ss = [20 + 20 * d["n_clusters"] for cid, d in feats.items() if kind_of.get(cid) == kind]
             ax.scatter(xs, ys, s=ss, alpha=0.7, label=kind)
         ax.set_xlabel("selfcheck_contra_mean")
         ax.set_ylabel("semantic_entropy")
-        ax.set_title(f"m6: contra × entropy (размер = n_clusters)\n"
-                     f"split={args.split}  {args.m6_features}", fontsize=9)
+        ax.set_title(
+            f"m6: contra × entropy (размер = n_clusters)\nsplit={args.split}  {args.m6_features}",
+            fontsize=9,
+        )
         ax.legend()
         fig.tight_layout()
         fig.savefig(out_dir / "m6_scatter.png", dpi=150)

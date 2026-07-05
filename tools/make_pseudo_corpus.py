@@ -8,6 +8,7 @@
   python -m tools.make_pseudo_corpus --config configs/config.cloud.yaml --limit 20
   python -m tools.make_pseudo_corpus --config configs/config.cloud.yaml
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,38 +21,48 @@ from src.common.llm_client import LLMClient
 
 # --- метки по таблице docs/07.2 ---------------------------------------------
 LABELS: dict[str, dict] = {
-    "clean":             {"faith": 1, "rel": 1, "markers": []},
-    "hallucination":     {"faith": 0, "rel": 1, "markers": ["hallucination"]},
+    "clean": {"faith": 1, "rel": 1, "markers": []},
+    "hallucination": {"faith": 0, "rel": 1, "markers": ["hallucination"]},
     "incomplete_answer": {"faith": 0, "rel": 1, "markers": ["incomplete_answer"]},
-    "off_topic_answer":  {"faith": 1, "rel": 0, "markers": ["off_topic_answer"]},
+    "off_topic_answer": {"faith": 1, "rel": 0, "markers": ["off_topic_answer"]},
 }
 
 # микс 2/1/1/1 (clean/halluc/incomplete/off-topic)
 _KIND_CYCLE = ["clean", "hallucination", "clean", "incomplete_answer", "off_topic_answer"]
 
-GEN_SYSTEM = ("Ты помогаешь готовить синтетические данные для тестирования систем "
-              "проверки ответов. Выводи только текст ответа, без пояснений, преамбул "
-              "и кавычек. Отвечай ТОЛЬКО на русском языке. Не повторяй вопрос в ответе.")
+GEN_SYSTEM = (
+    "Ты помогаешь готовить синтетические данные для тестирования систем "
+    "проверки ответов. Выводи только текст ответа, без пояснений, преамбул "
+    "и кавычек. Отвечай ТОЛЬКО на русском языке. Не повторяй вопрос в ответе."
+)
 
 GEN_USER: dict[str, str] = {
-    "clean": ("Абзац:\n{par}\n\nВопрос: {q}\n\n"
-              "Дай точный ответ на вопрос строго по абзацу (1–3 предложения)."),
-    "hallucination": ("Абзац:\n{par}\n\nВопрос: {q}\n\n"
-                      "Дай ответ на вопрос по абзацу (1–3 предложения), но намеренно "
-                      "подмени ровно ОДИН факт — число, дату, имя или условие — на "
-                      "правдоподобный, но неверный. Всё остальное оставь верным. "
-                      "ОБЯЗАТЕЛЬНО включи подмену: ответ без изменённого факта недопустим. "
-                      "Никак не отмечай подмену."),
-    "incomplete_answer": ("Абзац:\n{par}\n\nВопрос: {q}\n\n"
-                          "Дай верный, но намеренно НЕПОЛНЫЙ ответ на вопрос: опусти "
-                          "одну важную деталь или оговорку из абзаца, без которой ответ "
-                          "неполон. Не упоминай, что что-то опущено."),
-    "off_topic_answer": ("Абзац:\n{par}\n\nВопрос: {q}\n\n"
-                         "Напиши верный по абзацу ответ (1–3 предложения) про ДРУГОЙ "
-                         "аспект абзаца, который НЕ отвечает на заданный вопрос. "
-                         "Сам вопрос не упоминай. "
-                         "НЕ давай прямой ответ на вопрос ни явно, ни косвенно: "
-                         "не называй факт, дату, имя или число, которое является ответом."),
+    "clean": (
+        "Абзац:\n{par}\n\nВопрос: {q}\n\n"
+        "Дай точный ответ на вопрос строго по абзацу (1–3 предложения)."
+    ),
+    "hallucination": (
+        "Абзац:\n{par}\n\nВопрос: {q}\n\n"
+        "Дай ответ на вопрос по абзацу (1–3 предложения), но намеренно "
+        "подмени ровно ОДИН факт — число, дату, имя или условие — на "
+        "правдоподобный, но неверный. Всё остальное оставь верным. "
+        "ОБЯЗАТЕЛЬНО включи подмену: ответ без изменённого факта недопустим. "
+        "Никак не отмечай подмену."
+    ),
+    "incomplete_answer": (
+        "Абзац:\n{par}\n\nВопрос: {q}\n\n"
+        "Дай верный, но намеренно НЕПОЛНЫЙ ответ на вопрос: опусти "
+        "одну важную деталь или оговорку из абзаца, без которой ответ "
+        "неполон. Не упоминай, что что-то опущено."
+    ),
+    "off_topic_answer": (
+        "Абзац:\n{par}\n\nВопрос: {q}\n\n"
+        "Напиши верный по абзацу ответ (1–3 предложения) про ДРУГОЙ "
+        "аспект абзаца, который НЕ отвечает на заданный вопрос. "
+        "Сам вопрос не упоминай. "
+        "НЕ давай прямой ответ на вопрос ни явно, ни косвенно: "
+        "не называй факт, дату, имя или число, которое является ответом."
+    ),
 }
 
 
@@ -74,9 +85,11 @@ def split_ids(ids: list[str], seed: int) -> dict[str, list[str]]:
     random.Random(seed).shuffle(ids)
     n = len(ids)
     n_val, n_test = round(n * 0.1), round(n * 0.1)
-    return {"train": ids[: n - n_val - n_test],
-            "val": ids[n - n_val - n_test: n - n_test],
-            "test": ids[n - n_test:]}
+    return {
+        "train": ids[: n - n_val - n_test],
+        "val": ids[n - n_val - n_test : n - n_test],
+        "test": ids[n - n_test :],
+    }
 
 
 def load_pairs(source: str, n: int, seed: int) -> list[dict]:
@@ -84,11 +97,13 @@ def load_pairs(source: str, n: int, seed: int) -> list[dict]:
     rng = random.Random(seed)
     if source == "sberquad":
         from datasets import load_dataset  # ленивый импорт (тяжёлый)
+
         ds = load_dataset("kuznetsoffandrey/sberquad", split="train")
         by_par: dict[str, dict] = {}
         for row in ds:
-            by_par.setdefault(row["context"], {"question": row["question"],
-                                               "paragraph": row["context"]})
+            by_par.setdefault(
+                row["context"], {"question": row["question"], "paragraph": row["context"]}
+            )
         pool = list(by_par.values())
     else:
         with open(source, encoding="utf-8") as fh:
@@ -98,8 +113,15 @@ def load_pairs(source: str, n: int, seed: int) -> list[dict]:
     return rng.sample(pool, n)
 
 
-def generate_case(client: LLMClient, cache: Path, rng: random.Random,
-                  i: int, kind: str, pair: dict, par_pool: list[str]) -> dict:
+def generate_case(
+    client: LLMClient,
+    cache: Path,
+    rng: random.Random,
+    i: int,
+    kind: str,
+    pair: dict,
+    par_pool: list[str],
+) -> dict:
     """Один кейс канонического формата (docs/01) + meta; генерация кэшируется."""
     cid = f"pseudo_{i:05d}"
     cache_file = cache / f"{cid}.json"
@@ -114,22 +136,33 @@ def generate_case(client: LLMClient, cache: Path, rng: random.Random,
             raise ValueError(f"{cid}: кэш kind={cached.get('kind')}, ожидается {kind} — удали кэш")
         answer = cached["answer"]
     else:
-        messages = [{"role": "system", "content": GEN_SYSTEM},
-                    {"role": "user", "content": GEN_USER[kind].format(
-                        par=pair["paragraph"], q=pair["question"])}]
+        messages = [
+            {"role": "system", "content": GEN_SYSTEM},
+            {
+                "role": "user",
+                "content": GEN_USER[kind].format(par=pair["paragraph"], q=pair["question"]),
+            },
+        ]
         # публичные данные (SberQuAD), не корпус кураторов — флаг public_data=True
-        answer = client.chat(messages, temperature=0.7, max_tokens=300,
-                             public_data=True)[0]["text"].strip()
+        answer = client.chat(messages, temperature=0.7, max_tokens=300, public_data=True)[0][
+            "text"
+        ].strip()
         if not answer:
             raise ValueError(f"{cid}: пустой ответ от модели — не кэширую")
         tmp = cache_file.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps({"id": cid, "kind": kind, "answer": answer},
-                                  ensure_ascii=False), encoding="utf-8")
+        tmp.write_text(
+            json.dumps({"id": cid, "kind": kind, "answer": answer}, ensure_ascii=False),
+            encoding="utf-8",
+        )
         tmp.replace(cache_file)  # атомарная замена — обрыв не оставит битый кэш
-    return {"id": cid, "query": pair["question"],
-            "context": build_context(rng, pair["paragraph"], par_pool),
-            "answer": answer, **LABELS[kind],
-            "meta": {"kind": kind, "synthetic": True}}
+    return {
+        "id": cid,
+        "query": pair["question"],
+        "context": build_context(rng, pair["paragraph"], par_pool),
+        "answer": answer,
+        **LABELS[kind],
+        "meta": {"kind": kind, "synthetic": True},
+    }
 
 
 def main() -> None:
@@ -157,9 +190,12 @@ def main() -> None:
     todo = min(n, args.limit) if args.limit else n
 
     from tqdm import tqdm
+
     rng = random.Random(seed)  # один rng на весь прогон -> детерминированные контексты
-    cases = [generate_case(client, cache, rng, i, kinds[i], pairs[i], par_pool)
-             for i in tqdm(range(todo), desc="pseudo")]
+    cases = [
+        generate_case(client, cache, rng, i, kinds[i], pairs[i], par_pool)
+        for i in tqdm(range(todo), desc="pseudo")
+    ]
 
     splits = split_ids([c["id"] for c in cases], seed)
     by_id = {c["id"]: c for c in cases}
@@ -169,8 +205,10 @@ def main() -> None:
     is_smoke = args.limit is not None
     suffix = f"__smoke{args.limit}" if is_smoke else ""
     if is_smoke:
-        print(f"smoke-режим (--limit {args.limit}): пишу в pseudo_dev_*{suffix}.jsonl, "
-              "полный корпус не трогаю")
+        print(
+            f"smoke-режим (--limit {args.limit}): пишу в pseudo_dev_*{suffix}.jsonl, "
+            "полный корпус не трогаю"
+        )
     for split, ids in splits.items():
         path = out_dir / f"pseudo_dev_{split}{suffix}.jsonl"
         with open(path, "w", encoding="utf-8") as f:

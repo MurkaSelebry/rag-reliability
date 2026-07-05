@@ -4,6 +4,7 @@
   python -m src.m3.gepa_report --variant markers --seed 0
   python -m src.m3.gepa_report --stats artifacts/cloud/m3_gepa_stats_markers_seed0.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +17,7 @@ _EXCERPT = 400  # символов с начала и конца кандида�
 def _candidate_text(cand) -> str | None:
     """Текст инструкции кандидата из детальной статистики (формат dspy может меняться)."""
     if isinstance(cand, dict):
-        for v in cand.values():          # {predictor_name: instruction}
+        for v in cand.values():  # {predictor_name: instruction}
             if isinstance(v, str) and v.strip():
                 return v
         return None
@@ -26,7 +27,11 @@ def _candidate_text(cand) -> str | None:
 def _excerpt(text: str) -> str:
     if len(text) <= 2 * _EXCERPT:
         return text
-    return text[:_EXCERPT] + f"\n…[{len(text) - 2 * _EXCERPT} символов пропущено]…\n" + text[-_EXCERPT:]
+    return (
+        text[:_EXCERPT]
+        + f"\n…[{len(text) - 2 * _EXCERPT} символов пропущено]…\n"
+        + text[-_EXCERPT:]
+    )
 
 
 def main() -> None:
@@ -34,8 +39,9 @@ def main() -> None:
     ap.add_argument("--variant", choices=["markers", "plain"], default=None)
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--artifacts-dir", default="artifacts/cloud")
-    ap.add_argument("--stats", default=None,
-                    help="путь к stats-json (иначе строится из --variant/--seed)")
+    ap.add_argument(
+        "--stats", default=None, help="путь к stats-json (иначе строится из --variant/--seed)"
+    )
     ap.add_argument("--out", default=None, help="путь к markdown (иначе рядом со stats)")
     args = ap.parse_args()
 
@@ -62,7 +68,8 @@ def main() -> None:
         f"val_size: {stats.get('val_size')}",
         f"- use_marker_feedback: {stats.get('use_marker_feedback')}",
         f"- модели: task `{stats.get('task_model')}`, reflection `{stats.get('reflection_model')}`",
-        f"- LM-вызовы: task {stats.get('task_lm_calls')}, reflection {stats.get('reflection_lm_calls')}",
+        f"- LM-вызовы: task {stats.get('task_lm_calls')}, "
+        f"reflection {stats.get('reflection_lm_calls')}",
         f"- git: `{stats.get('git_hash')}`, profile: `{stats.get('profile')}`",
         "",
         "## Кандидаты",
@@ -85,14 +92,19 @@ def main() -> None:
                 lines += [_excerpt(text), "```"]
             lines.append("")
     else:
-        lines += ["_Полные тексты кандидатов недоступны — только скоры выше "
-                  "и финальная инструкция ниже._", ""]
+        lines += [
+            "_Полные тексты кандидатов недоступны — только скоры выше "
+            "и финальная инструкция ниже._",
+            "",
+        ]
 
-    lines += ["## Финальная инструкция", "", "```",
-              stats.get("best_instruction", ""), "```", ""]
+    lines += ["## Финальная инструкция", "", "```", stats.get("best_instruction", ""), "```", ""]
 
-    out_path = Path(args.out) if args.out else \
-        stats_path.parent / f"m3_gepa_report_{variant}_seed{seed}.md"
+    out_path = (
+        Path(args.out)
+        if args.out
+        else stats_path.parent / f"m3_gepa_report_{variant}_seed{seed}.md"
+    )
     out_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"отчёт: {out_path}")
 

@@ -11,6 +11,7 @@ Guard (A2): при cloud-профиле КАЖДЫЙ вызов обязан я�
 N-fallback (A1): если провайдер бросает ошибку на n>1, клиент автоматически
 деградирует до последовательных одиночных запросов.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -36,16 +37,29 @@ class LLMClient:
 
     # ---------- низкоуровневый запрос с retry ----------
 
-    def _request(self, *, messages: list[dict], temperature: float, n: int,
-                 max_tokens: int, top_p: float, logprobs: bool,
-                 retries: int = 3) -> list[dict]:
+    def _request(
+        self,
+        *,
+        messages: list[dict],
+        temperature: float,
+        n: int,
+        max_tokens: int,
+        top_p: float,
+        logprobs: bool,
+        retries: int = 3,
+    ) -> list[dict]:
         """-> choices: [{text, tokens: [{token, logprob, top: {tok: lp}}]}]"""
         for attempt in range(retries):
             try:
                 resp = self.client.chat.completions.create(
-                    model=self.model, messages=messages, temperature=temperature,
-                    n=n, max_tokens=max_tokens, top_p=top_p,
-                    logprobs=logprobs, top_logprobs=20 if logprobs else None,
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    n=n,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    logprobs=logprobs,
+                    top_logprobs=20 if logprobs else None,
                     extra_body=self.extra_body or None,
                 )
                 out = []
@@ -53,23 +67,34 @@ class LLMClient:
                     item = {"text": ch.message.content or "", "tokens": []}
                     if logprobs and ch.logprobs and ch.logprobs.content:
                         for t in ch.logprobs.content:
-                            item["tokens"].append({
-                                "token": t.token,
-                                "logprob": t.logprob,
-                                "top": {tt.token: tt.logprob for tt in (t.top_logprobs or [])},
-                            })
+                            item["tokens"].append(
+                                {
+                                    "token": t.token,
+                                    "logprob": t.logprob,
+                                    "top": {tt.token: tt.logprob for tt in (t.top_logprobs or [])},
+                                }
+                            )
                     out.append(item)
                 return out
             except Exception:
                 if attempt == retries - 1:
                     raise
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
 
     # ---------- публичный chat с guard (A2) и n-fallback (A1) ----------
 
-    def chat(self, messages: list[dict], *, temperature: float = 0.0, n: int = 1,
-             max_tokens: int = 512, top_p: float = 1.0, logprobs: bool = False,
-             case: Case | None = None, public_data: bool = False) -> list[dict]:
+    def chat(
+        self,
+        messages: list[dict],
+        *,
+        temperature: float = 0.0,
+        n: int = 1,
+        max_tokens: int = 512,
+        top_p: float = 1.0,
+        logprobs: bool = False,
+        case: Case | None = None,
+        public_data: bool = False,
+    ) -> list[dict]:
         """Единственный публичный метод отправки запросов.
 
         Guard (A2): при cloud-профиле необходимо явно передать либо `case`
@@ -85,12 +110,19 @@ class LLMClient:
         elif self.profile == "cloud" and not public_data:
             raise DataLeakError(
                 "cloud-профиль: вызов без case и без public_data=True запрещён — "
-                "пометь запрос по публичным данным явно или передай case")
+                "пометь запрос по публичным данным явно или передай case"
+            )
 
         # --- первый запрос; при n>1 и ошибке провайдера — деградация (A1) ---
         try:
-            choices = self._request(messages=messages, temperature=temperature, n=n,
-                                    max_tokens=max_tokens, top_p=top_p, logprobs=logprobs)
+            choices = self._request(
+                messages=messages,
+                temperature=temperature,
+                n=n,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                logprobs=logprobs,
+            )
         except Exception:
             if n <= 1:
                 raise
@@ -98,8 +130,14 @@ class LLMClient:
 
         # --- добор недостающих сэмплов одиночными запросами ---
         while len(choices) < n:
-            new = self._request(messages=messages, temperature=temperature, n=1,
-                                max_tokens=max_tokens, top_p=top_p, logprobs=logprobs)
+            new = self._request(
+                messages=messages,
+                temperature=temperature,
+                n=1,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                logprobs=logprobs,
+            )
             if not new:
                 raise RuntimeError("провайдер вернул 0 choices при n=1 — добор невозможен")
             choices += new
@@ -194,19 +232,24 @@ class JudgeClient(LLMClient):
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _cache_path(self, system: str, user: str) -> Path:
-        key = hashlib.sha256(
-            "\x00".join((self.model, system, user)).encode("utf-8")).hexdigest()
+        key = hashlib.sha256("\x00".join((self.model, system, user)).encode("utf-8")).hexdigest()
         return self.cache_dir / f"{key}.json"
 
-    def _chat_judge(self, system: str, user: str, max_tokens: int,
-                    case: Case | None = None) -> tuple[str, list]:
+    def _chat_judge(
+        self, system: str, user: str, max_tokens: int, case: Case | None = None
+    ) -> tuple[str, list]:
         choices = self.chat(
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.0, max_tokens=max_tokens, logprobs=True, case=case)
+            temperature=0.0,
+            max_tokens=max_tokens,
+            logprobs=True,
+            case=case,
+        )
         return choices[0]["text"], choices[0]["tokens"]
 
-    def judge(self, system: str, user: str, case: Case | None = None,
-              max_tokens: int = 400) -> tuple[float, float, dict]:
+    def judge(
+        self, system: str, user: str, case: Case | None = None, max_tokens: int = 400
+    ) -> tuple[float, float, dict]:
         """-> (p_faith, p_rel, meta). Кейс не теряется никогда (fallback до 0.5/0.5)."""
         cp = self._cache_path(system, user) if self.cache_dir else None
         if cp is not None and cp.exists():
@@ -230,7 +273,9 @@ class JudgeClient(LLMClient):
                 p_f, p_r, meta = 0.5, 0.5, {"method": "default", "raw": text[-400:]}
         if cp is not None:
             tmp = cp.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps({"p_faith": p_f, "p_rel": p_r, "meta": meta},
-                                      ensure_ascii=False), encoding="utf-8")
+            tmp.write_text(
+                json.dumps({"p_faith": p_f, "p_rel": p_r, "meta": meta}, ensure_ascii=False),
+                encoding="utf-8",
+            )
             tmp.replace(cp)  # атомарная замена — обрыв не оставит битый кэш
         return p_f, p_r, meta

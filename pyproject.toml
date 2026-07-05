@@ -1,0 +1,56 @@
+[project]
+name = "rag-reliability-m3m6"
+version = "0.0.0"
+description = "Методы 3 (LLM-as-judge/GEPA) и 6 (SelfCheck+entropy) проекта RAG-reliability"
+requires-python = ">=3.11"
+# Зависимости — зеркало requirements.txt (тот остаётся источником для CI/pip).
+dependencies = [
+    "openai>=1.40",
+    "dspy>=2.6.14",
+    "transformers>=4.44",
+    "torch>=2.3",
+    "sentence-transformers>=3.0",
+    "scikit-learn>=1.4",
+    "numpy",
+    "pyyaml",
+    "tqdm",
+    "razdel",
+    "pytest",
+    "datasets>=2.20",
+    "matplotlib",
+    "plotly",
+    "streamlit",
+    "mlflow",
+    "dvc",
+    "pandas",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# «Плоский» src-layout: пакеты внутри src/, но импорт как `src.common...` (как в тестах).
+packages = ["src", "src.common", "src.m3", "src.m6", "tools"]
+
+# torch ставится отдельным шагом с CPU-индексом
+# (`uv pip install --index-url https://download.pytorch.org/whl/cpu torch`);
+# смешивать индексы в общем резолве uv отказывается (No solution found).
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["reference_src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+# `l` как имя строки (`for l in fh`) — идиома всей кодовой базы, не переименовываем.
+ignore = ["E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# Текст промптов — семантика, не код: не переносим строки (смена текста = смена
+# промпта и инвалидация кэша судьи).
+"src/m3/prompts.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

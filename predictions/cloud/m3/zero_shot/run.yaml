@@ -51,6 +51,9 @@ config:
     features_cache: artifacts/cloud/m6_features
     out_pred_dir: predictions/cloud/m6
     entail_threshold: 0.5
+  tracking:
+    enabled: true
+    uri: file:./mlruns
   pseudo:
     gen_model: qwen/qwen-2.5-7b-instruct
     n: 300
@@ -58,7 +61,7 @@ config:
     source: sberquad
     cache: artifacts/pseudo_gen
     out_dir: data/processed
-git_hash: fa86d4dd8e799a9f38f7a38fefd6e5855b251fe9
+git_hash: e4f44188091e3a7725213103a62b35df7b91ab6e
 profile: cloud
 seed: 0
 split: test

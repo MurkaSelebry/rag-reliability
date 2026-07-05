@@ -1,14 +1,21 @@
 """Тесты LLMClient на стабах (без сети)."""
+
 import pytest
 
 from src.common.guard import DataLeakError
 from src.common.llm_client import LLMClient
 from src.common.schemas import Case
 
-CFG = {"profile": "cloud",
-       "llm": {"api_base": "http://x", "api_key": "k", "model": "m",
-               "max_ctx_chars": 1000,
-               "openrouter_extra_body": {"provider": {"require_parameters": True}}}}
+CFG = {
+    "profile": "cloud",
+    "llm": {
+        "api_base": "http://x",
+        "api_key": "k",
+        "model": "m",
+        "max_ctx_chars": 1000,
+        "openrouter_extra_body": {"provider": {"require_parameters": True}},
+    },
+}
 
 
 def _client(monkeypatch, fake_request):
@@ -22,6 +29,7 @@ def _choice(text):
 
 
 # ---- base 4 ----
+
 
 def test_guard_blocks_real_case(monkeypatch):
     c = _client(monkeypatch, lambda **kw: [_choice("ok")])
@@ -57,6 +65,7 @@ def test_model_override():
 
 # ---- A1: fallback on provider error for n>1 ----
 
+
 def test_n_fallback_on_provider_error(monkeypatch):
     """Провайдер бросает ошибку на n>1 — клиент деградирует до одиночных запросов."""
     calls = []
@@ -81,6 +90,7 @@ def test_top_up_empty_choices_raises(monkeypatch):
 
 
 # ---- A2: guard-by-default ----
+
 
 def test_cloud_without_case_blocked(monkeypatch):
     """cloud-профиль: вызов без case и без public_data=True запрещён."""

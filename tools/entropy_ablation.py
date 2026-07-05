@@ -6,6 +6,7 @@
   python -m tools.entropy_ablation --config configs/config.cloud.yaml --split val \
       --thresholds 0.3 0.4 0.5 --ns 3 5 10
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,13 +23,16 @@ from src.common.schemas import load_cases
 def _entropy_from_labels(labels: list[int]) -> dict:
     uniq, counts = np.unique(labels, return_counts=True)
     p = counts / counts.sum()
-    return {"semantic_entropy": float(-(p * np.log(p)).sum()),
-            "n_clusters": int(len(uniq)),
-            "answer_in_top_cluster": float(labels[0] == uniq[counts.argmax()])}
+    return {
+        "semantic_entropy": float(-(p * np.log(p)).sum()),
+        "n_clusters": int(len(uniq)),
+        "answer_in_top_cluster": float(labels[0] == uniq[counts.argmax()]),
+    }
 
 
-def cluster_features_multi(answer: str, samples: list[str], nli,
-                           thresholds: list[float], ns: list[int]) -> dict:
+def cluster_features_multi(
+    answer: str, samples: list[str], nli, thresholds: list[float], ns: list[int]
+) -> dict:
     """Фичи кластеров при каждом (thr, n): один батч NLI на все пары [answer]+samples.
 
     -> {(thr, n): {semantic_entropy, n_clusters, answer_in_top_cluster}}
@@ -41,8 +45,7 @@ def cluster_features_multi(answer: str, samples: list[str], nli,
             pairs += [(texts[i], texts[j]), (texts[j], texts[i])]
             idx.append((i, j))
     res = nli.score(pairs) if pairs else []
-    entail = {ij: (res[2 * k]["entail"], res[2 * k + 1]["entail"])
-              for k, ij in enumerate(idx)}
+    entail = {ij: (res[2 * k]["entail"], res[2 * k + 1]["entail"]) for k, ij in enumerate(idx)}
 
     out: dict[tuple[float, int], dict] = {}
     for thr in thresholds:
@@ -80,10 +83,14 @@ def main() -> None:
     cache = Path(m6["samples_cache"]) / args.split
 
     from src.m6.nli import NLIScorer  # ленивый тяжёлый импорт (torch)
+
     nli = NLIScorer(m6["nli_model"])
 
     from tqdm import tqdm
-    per_kind: dict[tuple[float, int], dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
+
+    per_kind: dict[tuple[float, int], dict[str, list[dict]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     n_cases = 0
     for c in tqdm(cases, desc=f"ablation/{args.split}"):
         f = cache / f"{c.id}.json"
@@ -101,13 +108,18 @@ def main() -> None:
     fields = ["semantic_entropy", "n_clusters"]
     result: dict[str, dict] = {}
     print(f"\nΔ (hallucination − clean), {n_cases} кейсов, split={args.split}")
-    print(f"{'thr':>5} {'N':>3}" + "".join(f"{'Δ ' + f:>22}" for f in fields)
-          + "".join(f"{'clean ' + f:>22}" for f in fields))
+    print(
+        f"{'thr':>5} {'N':>3}"
+        + "".join(f"{'Δ ' + f:>22}" for f in fields)
+        + "".join(f"{'clean ' + f:>22}" for f in fields)
+    )
     for thr in args.thresholds:
         for n in args.ns:
             groups = per_kind[(thr, n)]
-            means = {k: {f: float(np.mean([x[f] for x in xs])) for f in fields}
-                     for k, xs in groups.items()}
+            means = {
+                k: {f: float(np.mean([x[f] for x in xs])) for f in fields}
+                for k, xs in groups.items()
+            }
             row: dict = {"means_by_kind": means}
             line = f"{thr:>5.2f} {n:>3}"
             for f in fields:
@@ -118,16 +130,26 @@ def main() -> None:
                 else:
                     line += f"{'n/a':>22}"
             for f in fields:
-                line += (f"{means['clean'][f]:>22.3f}" if "clean" in means else f"{'n/a':>22}")
+                line += f"{means['clean'][f]:>22.3f}" if "clean" in means else f"{'n/a':>22}"
             print(line)
             result[f"thr={thr},n={n}"] = row
 
     out_path = Path(m6["samples_cache"]).parent / f"m6_entropy_ablation_{args.split}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps({"split": args.split, "n_cases": n_cases,
-                                    "thresholds": args.thresholds, "ns": args.ns,
-                                    "results": result},
-                                   ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(
+            {
+                "split": args.split,
+                "n_cases": n_cases,
+                "thresholds": args.thresholds,
+                "ns": args.ns,
+                "results": result,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     print(f"\njson: {out_path}")
 
 

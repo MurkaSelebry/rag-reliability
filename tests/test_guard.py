@@ -1,4 +1,5 @@
 """Guard: cloud-профиль допускает только синтетические кейсы (CLAUDE.md, docs/07.1)."""
+
 import pytest
 
 from src.common.guard import DataLeakError, assert_cloud_safe, is_synthetic

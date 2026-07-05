@@ -8,6 +8,7 @@
 Запуск: python -m tools.smoke_logprobs --config configs/config.cloud.yaml -n 3
 Код возврата 0 = провайдер пригоден для Метода 3; 1 = сменить provider.order.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,10 +53,11 @@ def main() -> int:
     for i in range(args.n):
         resp = client.chat.completions.create(
             model=llm["model"],
-            messages=[{"role": "system", "content": SYSTEM},
-                      {"role": "user", "content": USER}],
-            temperature=0.0, max_tokens=40,
-            logprobs=True, top_logprobs=20,
+            messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": USER}],
+            temperature=0.0,
+            max_tokens=40,
+            logprobs=True,
+            top_logprobs=20,
             extra_body=extra,
         )
         provider = getattr(resp, "provider", None) or (resp.model_extra or {}).get("provider")

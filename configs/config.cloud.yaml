@@ -58,6 +58,10 @@ m6:
   out_pred_dir: "predictions/cloud/m6"
   entail_threshold: 0.5
 
+tracking:
+  enabled: true
+  uri: "file:./mlruns"   # ТОЛЬКО локальный file-store (политика данных); http запрещён
+
 pseudo:
   gen_model: "qwen/qwen-2.5-7b-instruct" # генератор ответов псевдо-корпуса (решение: 7B)
   n: 300

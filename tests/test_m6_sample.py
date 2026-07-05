@@ -1,4 +1,5 @@
 """Добор сэмплов m6: сколько догенерировать под текущий n_samples."""
+
 import json
 
 from src.m6.sample import _need_samples

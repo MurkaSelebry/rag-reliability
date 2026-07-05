@@ -13,6 +13,10 @@ data:
   val:   "data/processed/dev_val.jsonl"
   test:  "data/processed/dev_test.jsonl"
 
+tracking:
+  enabled: false          # включить на local-этапе; ТОЛЬКО file:-uri (политика данных)
+  uri: "file:./mlruns"
+
 m3:
   mode: "gepa"            # zero_shot | few_shot | gepa
   gepa_auto: "light"      # light | medium | heavy

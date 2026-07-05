@@ -1,7 +1,9 @@
 """Локальная оценка для разработки. Финальные числа — только через общий
 замороженный evaluate.py платформы; этот модуль повторяет его логику для
 быстрых итераций внутри веток 3 и 6."""
+
 from __future__ import annotations
+
 import numpy as np
 from sklearn.metrics import f1_score
 
@@ -14,8 +16,10 @@ def _align(cases: list[Case], preds: list[Pred]):
     for c in cases:
         if c.faith is None or c.id not in by_id:
             continue
-        y_f.append(c.faith); y_r.append(c.rel)
-        p_f.append(by_id[c.id].p_faith); p_r.append(by_id[c.id].p_rel)
+        y_f.append(c.faith)
+        y_r.append(c.rel)
+        p_f.append(by_id[c.id].p_faith)
+        p_r.append(by_id[c.id].p_rel)
     return map(np.asarray, (y_f, y_r, p_f, p_r))
 
 
@@ -44,5 +48,7 @@ def evaluate(cases: list[Case], preds: list[Pred], t_faith: float, t_rel: float)
         "f1_macro_reliable": float(f1_score(y_joint, pred_joint, average="macro")),
         "f1_macro_faith": float(f1_score(y_f, pred_f, average="macro")),
         "f1_macro_rel": float(f1_score(y_r, pred_r, average="macro")),
-        "t_faith": t_faith, "t_rel": t_rel, "n": int(len(y_f)),
+        "t_faith": t_faith,
+        "t_rel": t_rel,
+        "n": int(len(y_f)),
     }

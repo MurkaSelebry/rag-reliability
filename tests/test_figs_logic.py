@@ -1,4 +1,5 @@
 """Чистая логика фигур: бины reliability diagram и кривая f1(t)."""
+
 import pytest
 
 from tools.make_figs import f1_threshold_curve, reliability_bins
@@ -8,9 +9,9 @@ def test_reliability_bins_means():
     probs = [0.05, 0.15, 0.95, 0.85, 0.9]
     labels = [0, 0, 1, 1, 0]
     bins = reliability_bins(probs, labels, n_bins=10)
-    b0 = next(b for b in bins if b["lo"] == 0.0)      # [0.0, 0.1)
+    b0 = next(b for b in bins if b["lo"] == 0.0)  # [0.0, 0.1)
     assert b0["n"] == 1 and b0["mean_prob"] == pytest.approx(0.05)
-    b9 = next(b for b in bins if b["hi"] == 1.0)      # [0.9, 1.0]
+    b9 = next(b for b in bins if b["hi"] == 1.0)  # [0.9, 1.0]
     assert b9["n"] == 2 and b9["frac_pos"] == pytest.approx(0.5)
     assert all(b["n"] == 0 or 0 <= b["frac_pos"] <= 1 for b in bins)
 
