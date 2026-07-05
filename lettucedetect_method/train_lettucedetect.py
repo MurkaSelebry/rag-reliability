@@ -1,26 +1,20 @@
 #!/usr/bin/env python
-"""Train logistic regression on LettuceDetect aggregate features.
-
-The script reuses the repository dataset schema and split logic. It does not
-modify existing project files; model artifacts and split files are written under
-results/lettucedetect/ by default.
-"""
+"""Train logistic regression on LettuceDetect aggregate features."""
 
 from __future__ import annotations
 
 import argparse
 
 import joblib
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
-from sklearn.multioutput import MultiOutputClassifier
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 
-from common import FeatureConfig, extract_features, make_detector, targets_from_samples
-from common import REPO_ROOT
+from _bootstrap import REPO_ROOT, add_repo_src_to_path
 
-from rag_reliability.dataset import load_jsonl, save_jsonl, split_samples
+add_repo_src_to_path()
+
+from classifier import targets_from_samples, train_feature_classifier
+from features import FeatureConfig, extract_features, make_detector
+from rag_reliability.dataset import load_jsonl, split_samples
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,11 +25,6 @@ def parse_args() -> argparse.Namespace:
         default="results/lettucedetect/classifier.joblib",
         help="Where to save the sklearn pipeline",
     )
-    parser.add_argument(
-        "--split-dir",
-        default="results/lettucedetect/splits",
-        help="Where to write RagSample train/val/test splits",
-    )
     parser.add_argument("--model-path", default=FeatureConfig.model_path)
     parser.add_argument("--threshold", type=float, default=FeatureConfig.threshold)
     parser.add_argument("--device", default=None, help="LettuceDetect device: cuda, cpu, etc.")
@@ -44,15 +33,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-iter", type=int, default=1000)
     return parser.parse_args()
-
-
-def validate_targets(y_train) -> None:
-    for idx, name in enumerate(("faithfulness", "relevance")):
-        if len(set(y_train[:, idx].tolist())) < 2:
-            raise ValueError(
-                f"Training split has only one class for {name}. "
-                "Use a larger dataset or adjust the split parameters."
-            )
 
 
 def main() -> None:
@@ -67,12 +47,6 @@ def main() -> None:
     )
     print(f"Split {len(samples)} samples -> train={len(train)} val={len(val)} test={len(test)}")
 
-    split_dir = REPO_ROOT / args.split_dir
-    save_jsonl(train, split_dir / "train.jsonl")
-    save_jsonl(val, split_dir / "val.jsonl")
-    save_jsonl(test, split_dir / "test.jsonl")
-    print(f"Wrote RagSample splits to {split_dir}")
-
     config = FeatureConfig(
         model_path=args.model_path,
         threshold=args.threshold,
@@ -82,18 +56,7 @@ def main() -> None:
 
     train_x = extract_features(train, detector, args.threshold, desc="features/train")
     train_y = targets_from_samples(train)
-    validate_targets(train_y)
-
-    pipeline = Pipeline(
-        steps=[
-            ("scaler", StandardScaler()),
-            (
-                "classifier",
-                MultiOutputClassifier(LogisticRegression(max_iter=args.max_iter)),
-            ),
-        ]
-    )
-    pipeline.fit(train_x, train_y)
+    pipeline = train_feature_classifier(train_x, train_y, max_iter=args.max_iter)
 
     if val:
         val_x = extract_features(val, detector, args.threshold, desc="features/val")

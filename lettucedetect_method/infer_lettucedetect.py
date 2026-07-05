@@ -1,21 +1,19 @@
 #!/usr/bin/env python
-"""Run a trained LettuceDetect logistic-regression classifier.
-
-Outputs repository-compatible Prediction JSONL, so scripts/evaluate.py can be
-used unchanged.
-"""
+"""Run a trained LettuceDetect logistic-regression classifier."""
 
 from __future__ import annotations
 
 import argparse
-import json
 
 import joblib
 
-from common import FeatureConfig, REPO_ROOT, extract_features, make_detector, select_split
+from _bootstrap import REPO_ROOT, add_repo_src_to_path
 
+add_repo_src_to_path()
+
+from classifier import predictions_from_outputs
+from features import FeatureConfig, extract_features, make_detector
 from rag_reliability.dataset import load_jsonl, save_jsonl
-from rag_reliability.schema import Prediction
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,17 +22,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         default="results/lettucedetect/classifier.joblib",
-        help="Trained classifier from train_classifier.py",
+        help="Trained classifier from train_lettucedetect.py",
     )
     parser.add_argument(
         "--output",
         default="results/lettucedetect/predictions.jsonl",
         help="Where to write Prediction JSONL",
     )
-    parser.add_argument("--split", choices=["all", "train", "val", "test"], default="test")
-    parser.add_argument("--train-ratio", type=float, default=0.8)
-    parser.add_argument("--val-ratio", type=float, default=0.1)
-    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--model-path", default=None, help="Override saved LettuceDetect model path")
     parser.add_argument("--threshold", type=float, default=None, help="Override saved threshold")
     parser.add_argument("--device", default=None, help="Override saved device")
@@ -56,38 +50,12 @@ def main() -> None:
     )
 
     samples = load_jsonl(REPO_ROOT / args.data)
-    samples = select_split(
-        samples,
-        split=args.split,
-        train_ratio=args.train_ratio,
-        val_ratio=args.val_ratio,
-        seed=args.seed,
-    )
-    print(f"Loaded {len(samples)} sample(s) for split={args.split}")
+    print(f"Loaded {len(samples)} sample(s) from {args.data}")
 
     detector = make_detector(config)
-    features = extract_features(samples, detector, config.threshold, desc=f"features/{args.split}")
+    features = extract_features(samples, detector, config.threshold, desc="features")
     pred_y = pipeline.predict(features)
-
-    predictions: list[Prediction] = []
-    for sample, row, feature_row in zip(samples, pred_y, features, strict=True):
-        predictions.append(
-            Prediction(
-                id=sample.id,
-                faithfulness_pred=int(row[0]),
-                relevance_pred=int(row[1]),
-                marker_pred=None,
-                raw_output=json.dumps(
-                    {
-                        "max_prob": float(feature_row[0]),
-                        "mean_prob": float(feature_row[1]),
-                        "frac_prob_gt_threshold": float(feature_row[2]),
-                    },
-                    ensure_ascii=False,
-                ),
-                invalid_output=False,
-            )
-        )
+    predictions = predictions_from_outputs(samples, pred_y, features)
 
     output = REPO_ROOT / args.output
     save_jsonl(predictions, output)

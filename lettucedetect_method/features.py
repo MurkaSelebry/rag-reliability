@@ -1,28 +1,15 @@
-"""Shared utilities for the LettuceDetect feature-extractor method.
-
-Run scripts in this directory as files, for example:
-    python lettucedetect/train_classifier.py ...
-
-The directory name intentionally matches the third-party package name requested
-by the project layout. Avoid `python -m lettucedetect...`, because that would
-make Python resolve this local directory instead of the installed package.
-"""
+"""Feature extraction for the LettuceDetect-based reliability method."""
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from pathlib import Path
-import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
 from tqdm import tqdm
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_DIR = REPO_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from rag_reliability.schema import RagSample  # noqa: E402
+if TYPE_CHECKING:
+    from rag_reliability.schema import RagSample
 
 
 DEFAULT_MODEL_PATH = "KRLabsOrg/lettucedect-large-modernbert-en-v1"
@@ -46,7 +33,7 @@ def make_detector(config: FeatureConfig):
     except ImportError as exc:
         raise ImportError(
             "LettuceDetect dependencies are not installed. Run: "
-            "uv pip install -r lettucedetect/requirements.txt"
+            "uv pip install -r lettucedetect_method/requirements.txt"
         ) from exc
 
     device = config.device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,7 +57,7 @@ def aggregate_token_scores(token_predictions: list[dict], threshold: float) -> l
 
 
 def extract_features(
-    samples: list[RagSample],
+    samples: list["RagSample"],
     detector,
     threshold: float,
     desc: str = "lettucedetect",
@@ -86,30 +73,3 @@ def extract_features(
         )
         rows.append(aggregate_token_scores(token_predictions, threshold))
     return np.asarray(rows, dtype=np.float32)
-
-
-def targets_from_samples(samples: list[RagSample]) -> np.ndarray:
-    """Return the two binary targets expected by the downstream classifier."""
-    return np.asarray([[s.faithfulness, s.relevance] for s in samples], dtype=np.int64)
-
-
-def select_split(
-    samples: list[RagSample],
-    split: str,
-    train_ratio: float,
-    val_ratio: float,
-    seed: int,
-) -> list[RagSample]:
-    """Select all/train/val/test using the repository's existing split helper."""
-    if split == "all":
-        return samples
-
-    from rag_reliability.dataset import split_samples
-
-    train, val, test = split_samples(
-        samples,
-        train_ratio=train_ratio,
-        val_ratio=val_ratio,
-        seed=seed,
-    )
-    return {"train": train, "val": val, "test": test}[split]
