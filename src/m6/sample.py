@@ -36,10 +36,14 @@ def main() -> None:
     ap.add_argument("--config", default="configs/config.yaml")
     ap.add_argument("--split", choices=["train", "val", "test"], required=True)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--n", type=int, default=None,
+                    help="переопределяет m6.n_samples (напр. добор до 10 для абляции N)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     m6, llm = cfg["m6"], cfg["llm"]
+    if args.n is not None:
+        m6 = {**m6, "n_samples": args.n}
     cases = load_cases(cfg["data"][args.split])
     assert_cloud_safe(cases, cfg.get("profile", "local"))
     if args.limit:
