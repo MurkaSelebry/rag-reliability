@@ -18,6 +18,16 @@
 - [x] tools/entropy_ablation.py: абляция thr×N из кэша (0 LLM-вызовов); интерпретация в docs/10 §4
 - [x] docs/10_gepa_stage.md — итоговый отчёт этапа
 
+## Этап −0.25 — viz & scale (cloud; docs/11)
+- [x] Гигиена: pyproject (ruff/pytest/deps), uv venv, pre-commit, CI + no-data-leak job
+- [x] src/common/results_index.py — единый индекс прогонов (5 DataFrame, тесты)
+- [x] tools/make_report.py — интерактивный self-contained HTML (plotly inline, 11 секций)
+- [x] tools/explorer.py — Streamlit-обозреватель (Кейсы/Разногласия/m6/GEPA-промпты)
+- [x] src/common/async_llm.py + --concurrency в m3.predict и m6.sample (замер 3.5×; кэш общий с sync)
+- [x] src/common/tracking.py (mlflow file-store) + хук в predict; backfill 12 ранов
+- [x] dvc init + dvc.yaml (pseudo→predict→report), локальный remote-плейсхолдер
+- [x] docs/11_viz_scale.md — итоги, принятые/отклонённые инструменты
+
 ## Этап 0 — фундамент
 - [ ] Получить сплиты платформы -> data/processed/ ; проверить схему loader-ом
 - [ ] Получить у кураторов словарь 13 маркеров -> configs/markers.yaml
