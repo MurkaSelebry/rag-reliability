@@ -46,6 +46,11 @@ select = ["E", "F", "I", "UP"]
 # `l` как имя строки (`for l in fh`) — идиома всей кодовой базы, не переименовываем.
 ignore = ["E741"]
 
+[tool.ruff.lint.per-file-ignores]
+# Текст промптов — семантика, не код: не переносим строки (смена текста = смена
+# промпта и инвалидация кэша судьи).
+"src/m3/prompts.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

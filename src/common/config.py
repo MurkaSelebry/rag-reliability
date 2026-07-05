@@ -3,6 +3,7 @@
 Правило проекта: код знает о профиле только api_base/api_key/model из конфига;
 ключи не хардкодятся, а приходят через переменные окружения (docs/07.3 п.3).
 """
+
 from __future__ import annotations
 
 import os
@@ -33,11 +34,13 @@ def _expand(obj):
     if isinstance(obj, list):
         return [_expand(x) for x in obj]
     if isinstance(obj, str):
+
         def sub(m: re.Match) -> str:
             val = os.environ.get(m.group(1))
             if val is None:
                 raise KeyError(f"переменная окружения {m.group(1)} не установлена (нужна конфигу)")
             return val
+
         return _VAR_RE.sub(sub, obj)
     return obj
 

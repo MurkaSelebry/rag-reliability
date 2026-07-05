@@ -1,4 +1,5 @@
 """Чистая логика фич m6 на стабе NLI (docs/04 этап 3): кластеры, энтропия, selfcheck."""
+
 import math
 
 import pytest
@@ -25,18 +26,19 @@ def test_selfcheck_mean_max():
     answer = "Ставка 5%. Срок 30 дней."
     samples = ["s1", "s2"]
     sents = sentences(answer)
-    table = {(("s1", sents[0])): {"entail": 0, "contra": 0.8},
-             (("s2", sents[0])): {"entail": 0, "contra": 0.6},
-             (("s1", sents[1])): {"entail": 0, "contra": 0.1},
-             (("s2", sents[1])): {"entail": 0, "contra": 0.3}}
+    table = {
+        (("s1", sents[0])): {"entail": 0, "contra": 0.8},
+        (("s2", sents[0])): {"entail": 0, "contra": 0.6},
+        (("s1", sents[1])): {"entail": 0, "contra": 0.1},
+        (("s2", sents[1])): {"entail": 0, "contra": 0.3},
+    }
     out = selfcheck_scores(answer, samples, StubNLI(table))
     assert out["selfcheck_contra_mean"] == pytest.approx((0.7 + 0.2) / 2)
     assert out["selfcheck_contra_max"] == pytest.approx(0.7)
 
 
 def _sym(a, b, entail):
-    return {(a, b): {"entail": entail, "contra": 0.0},
-            (b, a): {"entail": entail, "contra": 0.0}}
+    return {(a, b): {"entail": entail, "contra": 0.0}, (b, a): {"entail": entail, "contra": 0.0}}
 
 
 def test_semantic_clusters_union_find():

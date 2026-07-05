@@ -1,6 +1,6 @@
 """Метрика GEPA: глосс маркеров из configs/markers.yaml, score и feedback ±маркеры."""
+
 import dspy
-import pytest
 
 from src.m3.run_gepa import load_marker_gloss, make_metric
 
@@ -20,9 +20,9 @@ def test_gloss_loaded_from_yaml():
 
 def test_metric_score_halves():
     m = make_metric(use_markers=True, gloss={})
-    assert m(_gold(), _pred()).score == 1.0                     # обе оси верны
-    assert m(_gold(), _pred(f="FAIL")).score == 0.5             # одна ось
-    assert m(_gold("FAIL", "PASS"), _pred()).score == 0.0       # ни одной
+    assert m(_gold(), _pred()).score == 1.0  # обе оси верны
+    assert m(_gold(), _pred(f="FAIL")).score == 0.5  # одна ось
+    assert m(_gold("FAIL", "PASS"), _pred()).score == 0.0  # ни одной
 
 
 def test_feedback_contains_markers_when_enabled():

@@ -11,10 +11,11 @@
 Запуск:
   python -m src.m6.features --config configs/config.yaml --split val
 """
+
 from __future__ import annotations
+
 import argparse
 import json
-import math
 from pathlib import Path
 
 import numpy as np
@@ -37,8 +38,10 @@ def selfcheck_scores(answer: str, samples: list[str], nli) -> dict:
     res = nli.score(pairs)
     contra = np.array([r["contra"] for r in res]).reshape(len(sents), len(samples))
     per_sent = contra.mean(axis=1)  # средняя противоречивость предложения сэмплам
-    return {"selfcheck_contra_mean": float(per_sent.mean()),
-            "selfcheck_contra_max": float(per_sent.max())}
+    return {
+        "selfcheck_contra_mean": float(per_sent.mean()),
+        "selfcheck_contra_max": float(per_sent.max()),
+    }
 
 
 def semantic_clusters(texts: list[str], nli, thr: float) -> list[int]:
@@ -52,10 +55,13 @@ def semantic_clusters(texts: list[str], nli, thr: float) -> list[int]:
     res = nli.score(pairs) if pairs else []
     # union-find
     parent = list(range(n))
+
     def find(x):
         while parent[x] != x:
-            parent[x] = parent[parent[x]]; x = parent[x]
+            parent[x] = parent[parent[x]]
+            x = parent[x]
         return x
+
     for k, (i, j) in enumerate(idx):
         if res[2 * k]["entail"] > thr and res[2 * k + 1]["entail"] > thr:
             parent[find(i)] = find(j)
@@ -63,15 +69,17 @@ def semantic_clusters(texts: list[str], nli, thr: float) -> list[int]:
 
 
 def entropy_features(answer: str, samples: list[str], nli, thr: float) -> dict:
-    texts = [answer] + samples          # исходный ответ — элемент 0
+    texts = [answer] + samples  # исходный ответ — элемент 0
     labels = semantic_clusters(texts, nli, thr)
     uniq, counts = np.unique(labels, return_counts=True)
     p = counts / counts.sum()
     se = float(-(p * np.log(p)).sum())
     top = uniq[counts.argmax()]
-    return {"semantic_entropy": se,
-            "n_clusters": int(len(uniq)),
-            "answer_in_top_cluster": float(labels[0] == top)}
+    return {
+        "semantic_entropy": se,
+        "n_clusters": int(len(uniq)),
+        "answer_in_top_cluster": float(labels[0] == top),
+    }
 
 
 def main():
@@ -84,15 +92,18 @@ def main():
     m6 = cfg["m6"]
 
     from .nli import NLIScorer
+
     nli = NLIScorer(m6["nli_model"])
     from sentence_transformers import SentenceTransformer
+
     emb = SentenceTransformer(m6["embed_model"])
 
     cases = load_cases(cfg["data"][args.split])
     if args.limit is not None:
-        cases = cases[:args.limit]
+        cases = cases[: args.limit]
     cache = Path(m6["samples_cache"]) / args.split
-    out_dir = Path(m6["features_cache"]); out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(m6["features_cache"])
+    out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{args.split}.jsonl"
 
     done = set()
@@ -112,8 +123,9 @@ def main():
             feats = {"id": c.id}
             feats.update(selfcheck_scores(c.answer, samples, nli))
             feats.update(entropy_features(c.answer, samples, nli, m6["entail_threshold"]))
-            v = emb.encode([f"query: {c.q_text()}", f"passage: {c.answer}"],
-                           normalize_embeddings=True)
+            v = emb.encode(
+                [f"query: {c.q_text()}", f"passage: {c.answer}"], normalize_embeddings=True
+            )
             feats["cos_q_a"] = float(v[0] @ v[1])
             fout.write(json.dumps(feats, ensure_ascii=False) + "\n")
             fout.flush()

@@ -1,5 +1,4 @@
 """Абляция: кластеры при нескольких порогах и N из одной NLI-матрицы."""
-import pytest
 
 from tools.entropy_ablation import cluster_features_multi
 
@@ -34,8 +33,9 @@ def test_n_slice_uses_prefix():
             return super().score(pairs)
 
     table = {**_sym("ans", "s1", 0.9), **_sym("ans", "s2", 0.9), **_sym("s1", "s2", 0.9)}
-    res = cluster_features_multi("ans", ["s1", "s2"], CountingNLI(table),
-                                 thresholds=[0.5], ns=[1, 2])
+    res = cluster_features_multi(
+        "ans", ["s1", "s2"], CountingNLI(table), thresholds=[0.5], ns=[1, 2]
+    )
     assert res[(0.5, 2)]["n_clusters"] == 1
-    assert res[(0.5, 1)]["n_clusters"] == 1          # ans~s1
-    assert len(calls) == 1                            # один батч на кейс
+    assert res[(0.5, 1)]["n_clusters"] == 1  # ans~s1
+    assert len(calls) == 1  # один батч на кейс

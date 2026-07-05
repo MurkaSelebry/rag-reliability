@@ -3,6 +3,7 @@
 Только file:-uri, никаких http — правило проекта «никаких внешних вызовов данных».
 Конфиг редактируется (api_key → ***) перед логированием параметров.
 """
+
 from __future__ import annotations
 
 import os
@@ -31,9 +32,15 @@ def _flatten(d: dict, prefix: str = "") -> dict[str, str]:
     return out
 
 
-def log_run(tracking_uri: str, experiment: str, run_name: str, cfg: dict,
-            metrics: dict, artifacts: list | None = None,
-            tags: dict | None = None) -> str:
+def log_run(
+    tracking_uri: str,
+    experiment: str,
+    run_name: str,
+    cfg: dict,
+    metrics: dict,
+    artifacts: list | None = None,
+    tags: dict | None = None,
+) -> str:
     """Логирует один прогон в локальный MLflow-store и возвращает его run_id.
 
     Секрет api_key вычищается через _redact до разворачивания cfg в параметры.

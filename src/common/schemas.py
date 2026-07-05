@@ -1,7 +1,9 @@
 """Общие структуры данных и чтение/запись jsonl."""
+
 from __future__ import annotations
+
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -9,13 +11,15 @@ from pathlib import Path
 class Case:
     id: str
     query: str
-    context: list[str]          # список чанков
+    context: list[str]  # список чанков
     answer: str
     dialog: list[str] = field(default_factory=list)
-    faith: int | None = None    # 1 = faithful (PASS), 0 = FAIL; None на приватном тесте
+    faith: int | None = None  # 1 = faithful (PASS), 0 = FAIL; None на приватном тесте
     rel: int | None = None
     markers: list[str] = field(default_factory=list)
-    meta: dict = field(default_factory=dict)   # напр. {"kind": ..., "synthetic": true} у псевдо-корпуса
+    meta: dict = field(
+        default_factory=dict
+    )  # напр. {"kind": ..., "synthetic": true} у псевдо-корпуса
 
     @property
     def reliable(self) -> int | None:
@@ -24,7 +28,7 @@ class Case:
         return int(self.faith == 1 and self.rel == 1)
 
     def ctx_text(self, max_chars: int | None = None) -> str:
-        parts = [f"[Чанк {i+1}] {c}" for i, c in enumerate(self.context)]
+        parts = [f"[Чанк {i + 1}] {c}" for i, c in enumerate(self.context)]
         text = "\n".join(parts)
         if max_chars and len(text) > max_chars:
             text = text[:max_chars] + "\n[контекст усечён]"
@@ -52,17 +56,19 @@ def load_cases(path: str | Path) -> list[Case]:
             if not line.strip():
                 continue
             d = json.loads(line)
-            cases.append(Case(
-                id=str(d["id"]),
-                query=d["query"],
-                context=d["context"] if isinstance(d["context"], list) else [d["context"]],
-                answer=d["answer"],
-                dialog=d.get("dialog") or [],
-                faith=d.get("faith"),
-                rel=d.get("rel"),
-                markers=d.get("markers") or [],
-                meta=d.get("meta") or {},
-            ))
+            cases.append(
+                Case(
+                    id=str(d["id"]),
+                    query=d["query"],
+                    context=d["context"] if isinstance(d["context"], list) else [d["context"]],
+                    answer=d["answer"],
+                    dialog=d.get("dialog") or [],
+                    faith=d.get("faith"),
+                    rel=d.get("rel"),
+                    markers=d.get("markers") or [],
+                    meta=d.get("meta") or {},
+                )
+            )
     return cases
 
 

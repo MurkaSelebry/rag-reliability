@@ -5,6 +5,7 @@
 и сэмплов для детальных карточек). Никаких сетевых вызовов, всё локально.
 Инструмент для разбора off_topic-путаницы faithfulness и изменений промпта GEPA.
 """
+
 from __future__ import annotations
 
 import difflib
@@ -127,8 +128,9 @@ def page_cases(runs, predictions):
         splits = sorted(predictions["split"].dropna().unique().tolist())
         split = st.selectbox("split", splits, index=splits.index("val") if "val" in splits else 0)
     with c2:
-        variant = st.selectbox("variant", variants,
-                               index=variants.index("zero_shot") if "zero_shot" in variants else 0)
+        variant = st.selectbox(
+            "variant", variants, index=variants.index("zero_shot") if "zero_shot" in variants else 0
+        )
     with c3:
         em_all = sorted(str(x) for x in predictions["extract_method"].dropna().unique().tolist())
         em_sel = st.multiselect("extract_method", em_all, default=em_all)
@@ -172,8 +174,17 @@ def page_cases(runs, predictions):
         df = df[df["correct"] == False]  # noqa: E712
 
     st.caption(f"Отфильтровано кейсов: {len(df)}")
-    show_cols = ["id", "kind", "p_faith", "p_rel", "faith", "rel",
-                 "pred_reliable", "gold_reliable", "correct"]
+    show_cols = [
+        "id",
+        "kind",
+        "p_faith",
+        "p_rel",
+        "faith",
+        "rel",
+        "pred_reliable",
+        "gold_reliable",
+        "correct",
+    ]
     st.dataframe(df[show_cols], use_container_width=True, hide_index=True)
 
     ids = df["id"].astype(str).tolist()
@@ -195,8 +206,7 @@ def _case_card(runs, predictions, split: str, case_id: str):
         st.info("сырой кейс не найден в data/processed")
     else:
         st.markdown(f"**Вопрос**\n\n{case['query']}")
-        st.markdown(f"**kind:** `{case.get('kind')}` — "
-                    f"**markers:** {case.get('markers')}")
+        st.markdown(f"**kind:** `{case.get('kind')}` — **markers:** {case.get('markers')}")
         st.caption("Контекст (какой чанк — источник, надёжно неизвестно; просто список):")
         for i, ch in enumerate(case["context"]):
             st.markdown(f"[Чанк {i + 1}] {ch}")
@@ -205,21 +215,24 @@ def _case_card(runs, predictions, split: str, case_id: str):
 
     st.markdown("---")
     st.subheader("Вердикты всех вариантов по этому id")
-    across = predictions[(predictions["split"] == split)
-                         & (predictions["id"].astype(str) == str(case_id))].copy()
+    across = predictions[
+        (predictions["split"] == split) & (predictions["id"].astype(str) == str(case_id))
+    ].copy()
     if across.empty:
         st.info("нет данных")
         return
     rows = []
     for _, r in across.iterrows():
         tf, tr = _thresholds(runs, r["variant"], split)
-        rows.append({
-            "variant": r["variant"],
-            "p_faith": r["p_faith"],
-            "p_rel": r["p_rel"],
-            "extract_method": r["extract_method"],
-            "pred_reliable": int((r["p_faith"] >= tf) & (r["p_rel"] >= tr)),
-        })
+        rows.append(
+            {
+                "variant": r["variant"],
+                "p_faith": r["p_faith"],
+                "p_rel": r["p_rel"],
+                "extract_method": r["extract_method"],
+                "pred_reliable": int((r["p_faith"] >= tf) & (r["p_rel"] >= tr)),
+            }
+        )
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     for _, r in across.iterrows():
@@ -266,8 +279,9 @@ def page_disagreements(runs, predictions):
 
     merged["rel_a"] = ((merged["p_faith_a"] >= taf) & (merged["p_rel_a"] >= tar)).astype(int)
     merged["rel_b"] = ((merged["p_faith_b"] >= tbf) & (merged["p_rel_b"] >= tbr)).astype(int)
-    merged["delta_p"] = ((merged["p_faith_a"] - merged["p_faith_b"]).abs()
-                         + (merged["p_rel_a"] - merged["p_rel_b"]).abs())
+    merged["delta_p"] = (merged["p_faith_a"] - merged["p_faith_b"]).abs() + (
+        merged["p_rel_a"] - merged["p_rel_b"]
+    ).abs()
 
     diff = merged[merged["rel_a"] != merged["rel_b"]].sort_values("delta_p", ascending=False)
     st.caption(f"Кейсов с разными вердиктами reliable: {len(diff)} из {len(merged)}")
@@ -275,12 +289,21 @@ def page_disagreements(runs, predictions):
         st.info("расхождений вердиктов нет")
         return
 
-    cols = ["id", "kind_a",
-            "p_faith_a", "p_rel_a", "rel_a",
-            "p_faith_b", "p_rel_b", "rel_b", "delta_p"]
+    cols = [
+        "id",
+        "kind_a",
+        "p_faith_a",
+        "p_rel_a",
+        "rel_a",
+        "p_faith_b",
+        "p_rel_b",
+        "rel_b",
+        "delta_p",
+    ]
     cols = [c for c in cols if c in diff.columns]
-    st.dataframe(diff[cols].rename(columns={"kind_a": "kind"}),
-                 use_container_width=True, hide_index=True)
+    st.dataframe(
+        diff[cols].rename(columns={"kind_a": "kind"}), use_container_width=True, hide_index=True
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -298,8 +321,12 @@ def page_m6(predictions, m6_features):
         return
 
     # kind берём из predictions (голд-метки)
-    gold_kind = (predictions[predictions["split"] == "val"][["id", "kind"]]
-                 .drop_duplicates("id").set_index("id")["kind"].to_dict())
+    gold_kind = (
+        predictions[predictions["split"] == "val"][["id", "kind"]]
+        .drop_duplicates("id")
+        .set_index("id")["kind"]
+        .to_dict()
+    )
     feats["kind"] = feats["id"].astype(str).map(lambda i: gold_kind.get(i))
 
     kinds_all = sorted(str(x) for x in feats["kind"].dropna().unique().tolist())
@@ -323,9 +350,18 @@ def page_m6(predictions, m6_features):
     if not row.empty:
         st.subheader("Признаки m6")
         st.dataframe(
-            row[["selfcheck_contra_mean", "selfcheck_contra_max", "semantic_entropy",
-                 "n_clusters", "answer_in_top_cluster", "cos_q_a"]],
-            use_container_width=True, hide_index=True,
+            row[
+                [
+                    "selfcheck_contra_mean",
+                    "selfcheck_contra_max",
+                    "semantic_entropy",
+                    "n_clusters",
+                    "answer_in_top_cluster",
+                    "cos_q_a",
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True,
         )
 
     samples = _load_samples(str(sel_id), split="val")
@@ -359,9 +395,18 @@ def page_gepa(gepa):
             st.info("нет данных для этого run")
         else:
             st.dataframe(
-                sub[["cand_idx", "val_score", "is_best",
-                     "task_lm_calls", "reflection_lm_calls", "pred_dir"]],
-                use_container_width=True, hide_index=True,
+                sub[
+                    [
+                        "cand_idx",
+                        "val_score",
+                        "is_best",
+                        "task_lm_calls",
+                        "reflection_lm_calls",
+                        "pred_dir",
+                    ]
+                ],
+                use_container_width=True,
+                hide_index=True,
             )
 
     final = _load_gepa_prompt(variant, seed)

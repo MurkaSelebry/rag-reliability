@@ -1,0 +1,35 @@
+# CI: линт + стабовые тесты (без секретов и сети к LLM) + страховка от утечки данных.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install deps (torch — CPU-колёса)
+        run: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+      - name: Ruff
+        run: |
+          pip install ruff
+          ruff check .
+      - name: Tests (стабы, без GPU/сети)
+        run: pytest tests/ -x -q
+
+  no-data-leak:
+    # Страховка поверх .gitignore: в git не должно попасть содержимое data/ и .env.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tracked files
+        run: |
+          bad=$(git ls-files | grep -E '^data/processed/|(^|/)\.env$' || true)
+          if [ -n "$bad" ]; then echo "Утечка в git: $bad"; exit 1; fi
+          echo "OK: data/processed и .env не в git"

@@ -1,4 +1,5 @@
 """AsyncLLMClient: конкуррентность ограничена семафором, guard и порядок результатов."""
+
 import asyncio
 
 import pytest
@@ -7,8 +8,10 @@ from src.common.async_llm import AsyncJudgeClient
 from src.common.guard import DataLeakError
 from src.common.schemas import Case
 
-CFG = {"profile": "cloud", "llm": {"api_base": "http://x", "api_key": "k", "model": "m",
-                                   "max_ctx_chars": 1000}}
+CFG = {
+    "profile": "cloud",
+    "llm": {"api_base": "http://x", "api_key": "k", "model": "m", "max_ctx_chars": 1000},
+}
 
 
 def _mk_client(monkeypatch, delay=0.01):
@@ -32,7 +35,7 @@ def test_semaphore_caps_concurrency(monkeypatch):
     cases = [Case(id=f"pseudo_{i}", query="q", context=["c"], answer="a") for i in range(6)]
     out = asyncio.run(client.judge_many("sys", [(c, f"user_{i:03d}") for i, c in enumerate(cases)]))
     assert len(out) == 6 and seen["calls"] == 6
-    assert seen["max_active"] <= 2                       # семафор работает
+    assert seen["max_active"] <= 2  # семафор работает
     assert [o[2]["raw"][-4:-1] for o in out] == [f"{i:03d}" for i in range(6)]  # порядок сохранён
 
 

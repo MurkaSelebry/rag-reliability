@@ -1,8 +1,12 @@
-# данные и артефакты не коммитим (правило проекта)
-artifacts/
-data/
+# данные и артефакты не коммитим (правило проекта); *.dvc-указатели — коммитим
+artifacts/*
+!artifacts/*.dvc
+data/*
+!data/*.dvc
 # секреты
 .env
+# mlflow file-store (локальный трекинг)
+mlruns/
 # python
 __pycache__/
 *.pyc

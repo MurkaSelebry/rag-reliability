@@ -1,4 +1,5 @@
 """Чистая логика генератора псевдо-корпуса (docs/07.2): микс, контекст, сплиты."""
+
 import random
 from collections import Counter
 
@@ -23,9 +24,9 @@ def test_build_context_has_source_and_distractors():
     pool = [f"абзац {i}" for i in range(50)]
     ctx = build_context(rng, "источник", pool)
     assert "источник" in ctx
-    assert 2 <= len(ctx) <= 3                      # источник + 1–2 дистрактора
+    assert 2 <= len(ctx) <= 3  # источник + 1–2 дистрактора
     assert all(c == "источник" or c in pool for c in ctx)
-    assert len(set(ctx)) == len(ctx)               # без дублей
+    assert len(set(ctx)) == len(ctx)  # без дублей
 
 
 def test_build_context_shuffles():
@@ -39,7 +40,7 @@ def test_build_context_shuffles():
 def test_split_ids_80_10_10_deterministic():
     ids = [f"pseudo_{i:05d}" for i in range(300)]
     s1, s2 = split_ids(ids, seed=42), split_ids(ids, seed=42)
-    assert s1 == s2                                 # детерминизм
+    assert s1 == s2  # детерминизм
     assert sorted(s1["train"] + s1["val"] + s1["test"]) == sorted(ids)
     assert len(s1["val"]) == 30 and len(s1["test"]) == 30
     assert set(s1["train"]).isdisjoint(s1["val"])

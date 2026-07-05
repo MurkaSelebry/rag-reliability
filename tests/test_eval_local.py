@@ -1,4 +1,5 @@
 """Санити eval_local на синтетических предсказаниях (docs/05 этап 0)."""
+
 from src.common.eval_local import evaluate, fit_thresholds
 from src.common.schemas import Case, Pred
 
@@ -8,7 +9,7 @@ def _mk(n_good=20, n_bad=20):
     for i in range(n_good):  # надёжные кейсы с высокими p
         cases.append(Case(id=f"g{i}", query="q", context=["c"], answer="a", faith=1, rel=1))
         preds.append(Pred(id=f"g{i}", p_faith=0.9, p_rel=0.9))
-    for i in range(n_bad):   # ненадёжные с низкими p
+    for i in range(n_bad):  # ненадёжные с низкими p
         cases.append(Case(id=f"b{i}", query="q", context=["c"], answer="a", faith=0, rel=1))
         preds.append(Pred(id=f"b{i}", p_faith=0.1, p_rel=0.9))
     return cases, preds

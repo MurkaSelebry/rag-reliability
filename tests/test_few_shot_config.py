@@ -1,4 +1,5 @@
 """few_shot.yaml: структура, покрытие типов, якоря обеих осей (итог B1/B2)."""
+
 import yaml
 
 REQUIRED_FIELDS = {"q", "ctx", "a", "analysis", "faith", "rel"}
@@ -25,14 +26,16 @@ def test_off_topic_anchor_present():
 def test_incomplete_priority():
     """B2: минимум 2 примера с faith=FAIL, rel=PASS и словами про упущенную деталь."""
     ex = [e for e in _load() if e["faith"] == "FAIL" and e["rel"] == "PASS"]
-    assert sum("опущ" in e["analysis"].lower() or "неполн" in e["analysis"].lower()
-               for e in ex) >= 2
+    assert (
+        sum("опущ" in e["analysis"].lower() or "неполн" in e["analysis"].lower() for e in ex) >= 2
+    )
 
 
 def test_strict_rel_fail_anchor():
     """Противовес размытию rel после B1: есть пример с безоговорочным rel=FAIL в анализе."""
-    assert any(e["rel"] == "FAIL" and "не отвечает на вопрос" in e["analysis"].lower()
-               for e in _load())
+    assert any(
+        e["rel"] == "FAIL" and "не отвечает на вопрос" in e["analysis"].lower() for e in _load()
+    )
 
 
 def test_both_pass_present():

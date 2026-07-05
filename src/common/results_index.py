@@ -5,6 +5,7 @@
 Всё устойчиво к отсутствующим частям: любая пропавшая директория/файл даёт
 пустой DataFrame, исключения не пробрасываются.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,22 +20,44 @@ _REPORT_KEYS = ("f1_macro_reliable", "f1_macro_faith", "f1_macro_rel", "t_faith"
 _RUN_SPLITS = ("val", "test", "train")
 # Признаки, извлекаемые Методом 6
 _M6_FEATURE_KEYS = (
-    "selfcheck_contra_mean", "selfcheck_contra_max", "semantic_entropy",
-    "n_clusters", "answer_in_top_cluster", "cos_q_a",
+    "selfcheck_contra_mean",
+    "selfcheck_contra_max",
+    "semantic_entropy",
+    "n_clusters",
+    "answer_in_top_cluster",
+    "cos_q_a",
 )
 _RUN_COLS = (
-    "method", "variant", "split", *_REPORT_KEYS,
-    "profile", "seed", "git_hash", "share_single_cluster_test", "path",
+    "method",
+    "variant",
+    "split",
+    *_REPORT_KEYS,
+    "profile",
+    "seed",
+    "git_hash",
+    "share_single_cluster_test",
+    "path",
 )
 _PRED_COLS = (
-    "id", "method", "variant", "split", "p_faith", "p_rel",
-    "extract_method", "meta_raw", "faith", "rel", "kind", "markers",
+    "id",
+    "method",
+    "variant",
+    "split",
+    "p_faith",
+    "p_rel",
+    "extract_method",
+    "meta_raw",
+    "faith",
+    "rel",
+    "kind",
+    "markers",
 )
 
 
 @dataclass
 class ResultsIndex:
     """Набор таблиц по всем прогонам проекта."""
+
     runs: pd.DataFrame
     predictions: pd.DataFrame
     m6_features: pd.DataFrame
@@ -106,15 +129,19 @@ def _collect_runs(pred_root: Path) -> pd.DataFrame:
                 if not (vdir / f"{split}.jsonl").is_file():
                     continue
                 report = _read_json(vdir / f"report_{split}.json") or {}
-                rows.append({
-                    "method": "m3", "variant": vdir.name, "split": split,
-                    **{k: report.get(k) for k in _REPORT_KEYS},
-                    "profile": run_meta.get("profile"),
-                    "seed": run_meta.get("seed"),
-                    "git_hash": run_meta.get("git_hash"),
-                    "share_single_cluster_test": None,
-                    "path": str(vdir),
-                })
+                rows.append(
+                    {
+                        "method": "m3",
+                        "variant": vdir.name,
+                        "split": split,
+                        **{k: report.get(k) for k in _REPORT_KEYS},
+                        "profile": run_meta.get("profile"),
+                        "seed": run_meta.get("seed"),
+                        "git_hash": run_meta.get("git_hash"),
+                        "share_single_cluster_test": None,
+                        "path": str(vdir),
+                    }
+                )
     # m6 — плоская директория, variant="m6", отчёт только для test
     m6_root = pred_root / "m6"
     if m6_root.is_dir():
@@ -123,15 +150,19 @@ def _collect_runs(pred_root: Path) -> pd.DataFrame:
             if not (m6_root / f"{split}.jsonl").is_file():
                 continue
             report = _read_json(m6_root / f"report_{split}.json") or {}
-            rows.append({
-                "method": "m6", "variant": "m6", "split": split,
-                **{k: report.get(k) for k in _REPORT_KEYS},
-                "profile": run_meta.get("profile"),
-                "seed": run_meta.get("seed"),
-                "git_hash": run_meta.get("git_hash"),
-                "share_single_cluster_test": report.get("share_single_cluster_test"),
-                "path": str(m6_root),
-            })
+            rows.append(
+                {
+                    "method": "m6",
+                    "variant": "m6",
+                    "split": split,
+                    **{k: report.get(k) for k in _REPORT_KEYS},
+                    "profile": run_meta.get("profile"),
+                    "seed": run_meta.get("seed"),
+                    "git_hash": run_meta.get("git_hash"),
+                    "share_single_cluster_test": report.get("share_single_cluster_test"),
+                    "path": str(m6_root),
+                }
+            )
     if not rows:
         return _empty(_RUN_COLS)
     return pd.DataFrame(rows, columns=list(_RUN_COLS))
@@ -149,13 +180,16 @@ def _load_gold(data_root: Path) -> dict[str, dict[str, dict]]:
             continue
         try:
             from src.common.schemas import load_cases
+
             cases = load_cases(path)
         except Exception:
             continue
         gold[split] = {
             c.id: {
-                "faith": c.faith, "rel": c.rel,
-                "kind": (c.meta or {}).get("kind"), "markers": c.markers,
+                "faith": c.faith,
+                "rel": c.rel,
+                "kind": (c.meta or {}).get("kind"),
+                "markers": c.markers,
             }
             for c in cases
         }
@@ -181,7 +215,7 @@ def _collect_predictions(pred_root: Path, data_root: Path) -> pd.DataFrame:
             name = jf.name
             if _is_smoke(name):
                 continue
-            split = name[:-len(".jsonl")]
+            split = name[: -len(".jsonl")]
             if split not in _RUN_SPLITS:
                 continue
             gold_split = gold.get(split, {})
@@ -189,15 +223,22 @@ def _collect_predictions(pred_root: Path, data_root: Path) -> pd.DataFrame:
                 meta = rec.get("meta") or {}
                 raw = str(meta.get("raw", ""))[:400]
                 g = gold_split.get(str(rec.get("id")), {})
-                rows.append({
-                    "id": rec.get("id"),
-                    "method": method, "variant": variant, "split": split,
-                    "p_faith": rec.get("p_faith"), "p_rel": rec.get("p_rel"),
-                    "extract_method": meta.get("method"),
-                    "meta_raw": raw,
-                    "faith": g.get("faith"), "rel": g.get("rel"),
-                    "kind": g.get("kind"), "markers": g.get("markers"),
-                })
+                rows.append(
+                    {
+                        "id": rec.get("id"),
+                        "method": method,
+                        "variant": variant,
+                        "split": split,
+                        "p_faith": rec.get("p_faith"),
+                        "p_rel": rec.get("p_rel"),
+                        "extract_method": meta.get("method"),
+                        "meta_raw": raw,
+                        "faith": g.get("faith"),
+                        "rel": g.get("rel"),
+                        "kind": g.get("kind"),
+                        "markers": g.get("markers"),
+                    }
+                )
     if not rows:
         return _empty(_PRED_COLS)
     return pd.DataFrame(rows, columns=list(_PRED_COLS))
@@ -210,17 +251,22 @@ def _collect_m6_features(art_root: Path) -> pd.DataFrame:
     cols = ["id", "split", "feature_set", *_M6_FEATURE_KEYS]
     rows: list[dict] = []
     if art_root.is_dir():
-        for fdir in sorted(p for p in art_root.iterdir()
-                           if p.is_dir() and p.name.startswith("m6_features")):
+        for fdir in sorted(
+            p for p in art_root.iterdir() if p.is_dir() and p.name.startswith("m6_features")
+        ):
             for split in _RUN_SPLITS:
                 jf = fdir / f"{split}.jsonl"
                 if not jf.is_file():
                     continue
                 for rec in _read_jsonl(jf):
-                    rows.append({
-                        "id": rec.get("id"), "split": split, "feature_set": fdir.name,
-                        **{k: rec.get(k) for k in _M6_FEATURE_KEYS},
-                    })
+                    rows.append(
+                        {
+                            "id": rec.get("id"),
+                            "split": split,
+                            "feature_set": fdir.name,
+                            **{k: rec.get(k) for k in _M6_FEATURE_KEYS},
+                        }
+                    )
     if not rows:
         return _empty(cols)
     return pd.DataFrame(rows, columns=cols)
@@ -230,8 +276,16 @@ def _collect_m6_features(art_root: Path) -> pd.DataFrame:
 # gepa
 # ---------------------------------------------------------------------------
 def _collect_gepa(art_root: Path) -> pd.DataFrame:
-    cols = ["variant", "seed", "cand_idx", "val_score", "is_best",
-            "task_lm_calls", "reflection_lm_calls", "pred_dir"]
+    cols = [
+        "variant",
+        "seed",
+        "cand_idx",
+        "val_score",
+        "is_best",
+        "task_lm_calls",
+        "reflection_lm_calls",
+        "pred_dir",
+    ]
     rows: list[dict] = []
     if art_root.is_dir():
         for sf in sorted(art_root.glob("m3_gepa_stats_*.json")):
@@ -245,14 +299,18 @@ def _collect_gepa(art_root: Path) -> pd.DataFrame:
             scores = dr.get("val_aggregate_scores") or []
             best_idx = dr.get("best_idx")
             for i in range(len(cands)):
-                rows.append({
-                    "variant": variant, "seed": seed, "cand_idx": i,
-                    "val_score": scores[i] if i < len(scores) else None,
-                    "is_best": (i == best_idx),
-                    "task_lm_calls": d.get("task_lm_calls"),
-                    "reflection_lm_calls": d.get("reflection_lm_calls"),
-                    "pred_dir": stats_to_pred_dir(variant, seed),
-                })
+                rows.append(
+                    {
+                        "variant": variant,
+                        "seed": seed,
+                        "cand_idx": i,
+                        "val_score": scores[i] if i < len(scores) else None,
+                        "is_best": (i == best_idx),
+                        "task_lm_calls": d.get("task_lm_calls"),
+                        "reflection_lm_calls": d.get("reflection_lm_calls"),
+                        "pred_dir": stats_to_pred_dir(variant, seed),
+                    }
+                )
     if not rows:
         return _empty(cols)
     return pd.DataFrame(rows, columns=cols)
@@ -292,11 +350,15 @@ def _collect_entropy_ablation(art_root: Path) -> pd.DataFrame:
                 if not isinstance(val, dict):
                     continue
                 thr, n = _parse_thr_n(key)
-                rows.append({
-                    "split": split, "thr": thr, "n": n,
-                    "delta_semantic_entropy": val.get("delta_semantic_entropy"),
-                    "delta_n_clusters": val.get("delta_n_clusters"),
-                })
+                rows.append(
+                    {
+                        "split": split,
+                        "thr": thr,
+                        "n": n,
+                        "delta_semantic_entropy": val.get("delta_semantic_entropy"),
+                        "delta_n_clusters": val.get("delta_n_clusters"),
+                    }
+                )
     if not rows:
         return _empty(cols)
     return pd.DataFrame(rows, columns=cols)

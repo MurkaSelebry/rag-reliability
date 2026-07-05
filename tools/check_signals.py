@@ -9,6 +9,7 @@ off_topic -> p_rel ниже clean; у m6 на hallucination entropy/contra вы�
       --m3-pred predictions/cloud/m3/zero_shot/val.jsonl \
       --m6-features artifacts/cloud/m6_features/val.jsonl
 """
+
 from __future__ import annotations
 
 import argparse
@@ -19,15 +20,15 @@ from src.common.config import load_config
 from src.common.schemas import load_cases
 
 
-def group_means(values: dict[str, dict[str, float]], by_kind: dict[str, str],
-                fields: list[str]) -> dict[str, dict[str, float]]:
+def group_means(
+    values: dict[str, dict[str, float]], by_kind: dict[str, str], fields: list[str]
+) -> dict[str, dict[str, float]]:
     """Средние значений полей по kind; kind без данных пропускается."""
     acc: dict[str, list[dict]] = defaultdict(list)
     for cid, v in values.items():
         if cid in by_kind:
             acc[by_kind[cid]].append(v)
-    return {k: {f: sum(x[f] for x in xs) / len(xs) for f in fields}
-            for k, xs in acc.items()}
+    return {k: {f: sum(x[f] for x in xs) / len(xs) for f in fields} for k, xs in acc.items()}
 
 
 def _load_jsonl(path: str) -> dict[str, dict]:
@@ -60,15 +61,23 @@ def main() -> None:
         _print_table(f"m3 ({args.m3_pred})", m, ["p_faith", "p_rel"])
         if {"clean", "hallucination"} <= m.keys():
             d = m["clean"]["p_faith"] - m["hallucination"]["p_faith"]
-            print(f"сигнал faith (clean - hallucination): {d:+.3f} "
-                  + ("OK" if d > 0 else "!! нет сигнала"))
+            print(
+                f"сигнал faith (clean - hallucination): {d:+.3f} "
+                + ("OK" if d > 0 else "!! нет сигнала")
+            )
         if {"clean", "off_topic_answer"} <= m.keys():
             d = m["clean"]["p_rel"] - m["off_topic_answer"]["p_rel"]
-            print(f"сигнал rel (clean - off_topic):       {d:+.3f} "
-                  + ("OK" if d > 0 else "!! нет сигнала"))
+            print(
+                f"сигнал rel (clean - off_topic):       {d:+.3f} "
+                + ("OK" if d > 0 else "!! нет сигнала")
+            )
         if {"clean", "incomplete_answer"} <= m.keys():
             d = m["clean"]["p_faith"] - m["incomplete_answer"]["p_faith"]
-            status = "OK" if d > 0.2 else ("слабый — ожидаемо трудный тип" if d > 0 else "!! нет сигнала")
+            status = (
+                "OK"
+                if d > 0.2
+                else ("слабый — ожидаемо трудный тип" if d > 0 else "!! нет сигнала")
+            )
             print(f"сигнал faith (clean - incomplete):    {d:+.3f} {status}")
 
     if args.m6_features:
@@ -79,13 +88,20 @@ def main() -> None:
         if {"clean", "hallucination"} <= m.keys():
             d_se = m["hallucination"]["semantic_entropy"] - m["clean"]["semantic_entropy"]
             d_c = m["hallucination"]["selfcheck_contra_mean"] - m["clean"]["selfcheck_contra_mean"]
-            print(f"сигнал m6 (halluc - clean): entropy {d_se:+.3f}, contra {d_c:+.3f} "
-                  + ("OK" if (d_se > 0 or d_c > 0) else "!! нет сигнала"))
+            print(
+                f"сигнал m6 (halluc - clean): entropy {d_se:+.3f}, contra {d_c:+.3f} "
+                + ("OK" if (d_se > 0 or d_c > 0) else "!! нет сигнала")
+            )
         if {"clean", "incomplete_answer"} <= m.keys():
-            d_c = m["incomplete_answer"]["selfcheck_contra_mean"] - m["clean"]["selfcheck_contra_mean"]
+            d_c = (
+                m["incomplete_answer"]["selfcheck_contra_mean"]
+                - m["clean"]["selfcheck_contra_mean"]
+            )
             d_se = m["incomplete_answer"]["semantic_entropy"] - m["clean"]["semantic_entropy"]
-            print(f"инфо m6 (incomplete - clean): contra {d_c:+.3f}, entropy {d_se:+.3f} "
-                  "(consistency слепа к неполноте — ожидаемо, H4)")
+            print(
+                f"инфо m6 (incomplete - clean): contra {d_c:+.3f}, entropy {d_se:+.3f} "
+                "(consistency слепа к неполноте — ожидаемо, H4)"
+            )
 
 
 if __name__ == "__main__":

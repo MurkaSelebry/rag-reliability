@@ -1,5 +1,7 @@
 """Тесты загрузчика конфига: подстановка ${VAR}, чтение .env."""
+
 import os
+
 import pytest
 
 from src.common.config import load_config, load_dotenv

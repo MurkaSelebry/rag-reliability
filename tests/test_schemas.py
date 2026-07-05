@@ -1,13 +1,22 @@
 """Тесты структур данных и jsonl IO."""
+
 import json
 
 from src.common.schemas import Case, Pred, load_cases, save_preds
 
 
 def test_load_cases_full(tmp_path):
-    rec = {"id": "pseudo_00001", "query": "q?", "context": ["c1", "c2"], "answer": "a",
-           "dialog": ["клиент: привет"], "faith": 1, "rel": 0,
-           "markers": ["off_topic_answer"], "meta": {"kind": "off_topic_answer", "synthetic": True}}
+    rec = {
+        "id": "pseudo_00001",
+        "query": "q?",
+        "context": ["c1", "c2"],
+        "answer": "a",
+        "dialog": ["клиент: привет"],
+        "faith": 1,
+        "rel": 0,
+        "markers": ["off_topic_answer"],
+        "meta": {"kind": "off_topic_answer", "synthetic": True},
+    }
     p = tmp_path / "d.jsonl"
     p.write_text(json.dumps(rec, ensure_ascii=False) + "\n", encoding="utf-8")
     cases = load_cases(p)
