@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.common.guard import DataLeakError, assert_cloud_safe, is_synthetic
+from src.common.guard import DataLeakError, assert_case_cloud_safe, assert_cloud_safe, is_synthetic
 from src.common.schemas import Case
 
 
@@ -33,3 +33,17 @@ def test_cloud_profile_rejects_real_data():
 
 def test_cloud_profile_allows_synthetic():
     assert_cloud_safe([_case(id="pseudo_1"), _case(id="x", synthetic=True)], profile="cloud")
+
+
+def test_real_alfa_case_blocked_in_cloud():
+    """Реальный кейс кураторов не проходит в cloud ни при каких условиях."""
+    real = Case(
+        id="alfa_ab12cd34ef56",
+        query="q",
+        context=["c"],
+        answer="a",
+        meta={"synthetic": False, "source": "alfa"},
+    )
+    assert not is_synthetic(real)
+    with pytest.raises(DataLeakError):
+        assert_case_cloud_safe(real, "cloud")

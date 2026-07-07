@@ -9,9 +9,15 @@ llm:
   max_ctx_chars: 24000                   # грубое усечение контекста при переполнении
 
 data:
-  train: "data/processed/dev_train.jsonl"
-  val:   "data/processed/dev_val.jsonl"
-  test:  "data/processed/dev_test.jsonl"
+  # provisional-сплиты реального корпуса (src.data.make_splits);
+  # замещаются каноническими сплитами платформы, когда те появятся
+  train: "data/processed/alfa_dev_train.jsonl"
+  val:   "data/processed/alfa_dev_val.jsonl"
+  test:  "data/processed/alfa_dev_test.jsonl"
+
+alfa:
+  raw_csv: "data/raw/alfa/data.csv"   # сырьё кураторов (gitignored)
+  seed: 42
 
 tracking:
   enabled: false          # включить на local-этапе; ТОЛЬКО file:-uri (политика данных)
