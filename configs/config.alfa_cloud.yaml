@@ -36,7 +36,8 @@ m3:
   mode: "zero_shot"
   seed: 0
   gepa:
-    train_size: 300           # light-checkpoint; маркерные кейсы в подвыборке ~30%
+    train_size: 300           # light-checkpoint
+    train_marker_share: 0.3   # доля маркерных кейсов в подвыборке (одинакова для markers/plain)
     auto: "light"
     seeds: [0, 1, 2]
     variants:

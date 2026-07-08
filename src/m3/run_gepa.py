@@ -147,10 +147,22 @@ def main() -> None:
     assert_cloud_safe(train_cases, profile, allow_real=allow_real)  # guard до 1-го вызова
     assert_cloud_safe(val_cases, profile, allow_real=allow_real)
 
-    # детерминированная подвыборка train (seed прогона); val — целиком
+    # детерминированная подвыборка train (seed прогона); val — целиком.
+    # На реальном корпусе маркеры разреженные -> поднимаем их долю до
+    # gepa.train_marker_share (решение одинаково для markers и plain — H5 честен).
     rng = random.Random(args.seed)
     if train_size < len(train_cases):
-        train_cases = rng.sample(train_cases, train_size)
+        share = float(gcfg.get("train_marker_share", 0.0))
+        marked = [c for c in train_cases if c.markers]
+        if share > 0 and marked:
+            n_marked = min(len(marked), int(round(train_size * share)))
+            rest_pool = [c for c in train_cases if not c.markers]
+            picked = rng.sample(marked, n_marked) + rng.sample(rest_pool, train_size - n_marked)
+            rng.shuffle(picked)
+            train_cases = picked
+            print(f"[gepa] подвыборка {train_size}: маркерных {n_marked} ({share:.0%})")
+        else:
+            train_cases = rng.sample(train_cases, train_size)
 
     import dspy
 
