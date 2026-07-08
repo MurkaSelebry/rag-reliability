@@ -73,6 +73,12 @@ def main() -> None:
     ap.add_argument("--thresholds", type=float, nargs="+", default=[0.3, 0.4, 0.5])
     ap.add_argument("--ns", type=int, nargs="+", default=[3, 5, 10])
     ap.add_argument("--limit", type=int, default=None, help="smoke: первые N кейсов")
+    ap.add_argument(
+        "--by",
+        choices=["kind", "faith"],
+        default="kind",
+        help="группировка: kind (псевдо-корпус) или метка faith (реальный корпус)",
+    )
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -99,7 +105,10 @@ def main() -> None:
             continue
         samples = json.loads(f.read_text(encoding="utf-8"))["samples"]
         feats = cluster_features_multi(c.answer, samples, nli, args.thresholds, args.ns)
-        kind = c.meta.get("kind", "?")
+        if args.by == "faith":
+            kind = "hallucination" if c.faith == 0 else "clean"  # faith0≈halluc, faith1≈clean
+        else:
+            kind = c.meta.get("kind", "?")
         for key, v in feats.items():
             per_kind[key][kind].append(v)
         n_cases += 1

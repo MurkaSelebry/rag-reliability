@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 import copy
+import statistics
 import subprocess
 from pathlib import Path
 
 import yaml
+
+
+def cost_stats(durations_ms: list[float], n_calls: int, n_cases: int) -> dict:
+    """median_ms_per_case, calls_per_case — для колонки «цена» контракта платформы."""
+    median = statistics.median(durations_ms) if durations_ms else 0.0
+    return {
+        "median_ms_per_case": round(float(median), 2),
+        "llm_calls_per_case": round(n_calls / max(1, n_cases), 2),
+    }
 
 
 def git_hash() -> str | None:

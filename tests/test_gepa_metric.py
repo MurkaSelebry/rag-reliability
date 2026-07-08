@@ -14,8 +14,11 @@ def _pred(f="PASS", r="FAIL"):
 
 
 def test_gloss_loaded_from_yaml():
+    """Реальная таксономия кураторов: 13 маркеров reason_* с русскими глоссами."""
     gloss = load_marker_gloss("configs/markers.yaml")
-    assert "hallucination" in gloss and "факт" in gloss["hallucination"]
+    assert len(gloss) == 13
+    assert "reason_hallucinated_fact" in gloss and "факт" in gloss["reason_hallucinated_fact"]
+    assert "reason_incomplete_answer" in gloss
 
 
 def test_metric_score_halves():

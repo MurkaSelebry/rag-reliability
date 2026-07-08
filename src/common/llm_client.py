@@ -33,6 +33,8 @@ class LLMClient:
         self.profile: str = cfg.get("profile", "local")
         self.model: str = model or llm["model"]
         self.extra_body: dict = dict(llm.get("openrouter_extra_body") or {})
+        # явный opt-in владельца данных (guard.allow_real_data) — см. guard.py
+        self.allow_real: bool = bool((cfg.get("guard") or {}).get("allow_real_data"))
         self.client = OpenAI(base_url=llm["api_base"], api_key=llm["api_key"])
 
     # ---------- низкоуровневый запрос с retry ----------
@@ -62,6 +64,8 @@ class LLMClient:
                     top_logprobs=20 if logprobs else None,
                     extra_body=self.extra_body or None,
                 )
+                if resp.choices is None:
+                    raise RuntimeError("провайдер вернул choices=None (не тянет параметры запроса)")
                 out = []
                 for ch in resp.choices:
                     item = {"text": ch.message.content or "", "tokens": []}
@@ -106,7 +110,7 @@ class LLMClient:
         """
         # --- guard (A2) ---
         if case is not None:
-            assert_case_cloud_safe(case, self.profile)
+            assert_case_cloud_safe(case, self.profile, allow_real=self.allow_real)
         elif self.profile == "cloud" and not public_data:
             raise DataLeakError(
                 "cloud-профиль: вызов без case и без public_data=True запрещён — "
@@ -238,13 +242,16 @@ class JudgeClient(LLMClient):
     def _chat_judge(
         self, system: str, user: str, max_tokens: int, case: Case | None = None
     ) -> tuple[str, list]:
-        choices = self.chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.0,
-            max_tokens=max_tokens,
-            logprobs=True,
-            case=case,
-        )
+        msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        try:
+            choices = self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=True, case=case
+            )
+        except RuntimeError:
+            # провайдер не тянет logprobs — деградация: текст без токенов (regex-путь)
+            choices = self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=False, case=case
+            )
         return choices[0]["text"], choices[0]["tokens"]
 
     def judge(

@@ -32,6 +32,8 @@ class AsyncLLMClient:
         self.profile: str = cfg.get("profile", "local")
         self.model: str = model or llm["model"]
         self.extra_body: dict = dict(llm.get("openrouter_extra_body") or {})
+        # явный opt-in владельца данных (guard.allow_real_data) — см. guard.py
+        self.allow_real: bool = bool((cfg.get("guard") or {}).get("allow_real_data"))
         self.client = AsyncOpenAI(base_url=llm["api_base"], api_key=llm["api_key"])
 
     # ---------- низкоуровневый запрос с retry ----------
@@ -97,7 +99,7 @@ class AsyncLLMClient:
         """Единственный публичный метод отправки запросов (guard A2 + n-fallback A1)."""
         # --- guard (A2) ---
         if case is not None:
-            assert_case_cloud_safe(case, self.profile)
+            assert_case_cloud_safe(case, self.profile, allow_real=self.allow_real)
         elif self.profile == "cloud" and not public_data:
             raise DataLeakError(
                 "cloud-профиль: вызов без case и без public_data=True запрещён — "
@@ -153,13 +155,16 @@ class AsyncJudgeClient(AsyncLLMClient):
     async def _chat_judge_async(self, system: str, user: str, max_tokens: int) -> tuple[str, list]:
         """Одна генерация T=0 с logprobs. Per-case guard уже отработал в judge_many,
         поэтому здесь public_data=True — case не нужен."""
-        choices = await self.chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.0,
-            max_tokens=max_tokens,
-            logprobs=True,
-            public_data=True,
-        )
+        msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        try:
+            choices = await self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=True, public_data=True
+            )
+        except RuntimeError:
+            # провайдер не тянет logprobs — деградация: текст без токенов (regex-путь)
+            choices = await self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=False, public_data=True
+            )
         return choices[0]["text"], choices[0]["tokens"]
 
     async def judge_one(
@@ -200,7 +205,7 @@ class AsyncJudgeClient(AsyncLLMClient):
         self, system: str, items: list[tuple[Case, str]], max_tokens: int = 400
     ) -> list[tuple[float, float, dict]]:
         """Батч кейсов; guard по всему списку ДО любого запроса; порядок входа сохранён."""
-        assert_cloud_safe([c for c, _ in items], self.profile)
+        assert_cloud_safe([c for c, _ in items], self.profile, allow_real=self.allow_real)
         sem = asyncio.Semaphore(self.concurrency)  # семафор биндится к текущему loop
         return await asyncio.gather(
             *[self.judge_one(system, user, case, sem, max_tokens) for case, user in items]
