@@ -155,13 +155,16 @@ class AsyncJudgeClient(AsyncLLMClient):
     async def _chat_judge_async(self, system: str, user: str, max_tokens: int) -> tuple[str, list]:
         """Одна генерация T=0 с logprobs. Per-case guard уже отработал в judge_many,
         поэтому здесь public_data=True — case не нужен."""
-        choices = await self.chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.0,
-            max_tokens=max_tokens,
-            logprobs=True,
-            public_data=True,
-        )
+        msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        try:
+            choices = await self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=True, public_data=True
+            )
+        except RuntimeError:
+            # провайдер не тянет logprobs — деградация: текст без токенов (regex-путь)
+            choices = await self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=False, public_data=True
+            )
         return choices[0]["text"], choices[0]["tokens"]
 
     async def judge_one(

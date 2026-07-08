@@ -64,6 +64,8 @@ class LLMClient:
                     top_logprobs=20 if logprobs else None,
                     extra_body=self.extra_body or None,
                 )
+                if resp.choices is None:
+                    raise RuntimeError("провайдер вернул choices=None (не тянет параметры запроса)")
                 out = []
                 for ch in resp.choices:
                     item = {"text": ch.message.content or "", "tokens": []}
@@ -240,13 +242,16 @@ class JudgeClient(LLMClient):
     def _chat_judge(
         self, system: str, user: str, max_tokens: int, case: Case | None = None
     ) -> tuple[str, list]:
-        choices = self.chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.0,
-            max_tokens=max_tokens,
-            logprobs=True,
-            case=case,
-        )
+        msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        try:
+            choices = self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=True, case=case
+            )
+        except RuntimeError:
+            # провайдер не тянет logprobs — деградация: текст без токенов (regex-путь)
+            choices = self.chat(
+                msgs, temperature=0.0, max_tokens=max_tokens, logprobs=False, case=case
+            )
         return choices[0]["text"], choices[0]["tokens"]
 
     def judge(
