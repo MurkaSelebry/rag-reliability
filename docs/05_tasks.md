@@ -28,6 +28,28 @@
 - [x] dvc init + dvc.yaml (pseudo→predict→report), локальный remote-плейсхолдер
 - [x] docs/11_viz_scale.md — итоги, принятые/отклонённые инструменты
 
+## Этап 0a — онбординг реального корпуса (docs/12)
+- [x] data.zip → data/raw/alfa; адаптер alfa_loader (2245 кейсов, id=alfa_+sha1)
+- [x] guard: реальные кейсы блокируются в cloud; явный opt-in allow_real_data (разрешение владельца)
+- [x] configs/markers.yaml — реальные 13 reason_* с глоссами кураторов
+- [x] EDA (tools/eda_alfa): баланс, 2×2, маркеры×оси, длины, дубли, сравнение с псевдо
+- [x] provisional-сплиты: group-aware 1787/223/223 + curator-режим 1796/449
+- [x] бейзлайны: majority 0.430/0.405, surface 0.613/0.598 (f1_reliable val/test);
+      surface+e5 и curator-encoder — прогоны идут
+- [x] docs/12 с 7 вопросами кураторам
+
+## Этап 1 — боевые прогоны на реальном корпусе (OpenRouter c opt-in; vLLM позже)
+- [x] smoke logprobs профиля alfa_cloud (Phala, 100% logprobs)
+- [x] m3 zero_shot val+test: 0.568/0.584 — НЕ бьёт surface (стоп-сигнал Task 2, разбор сделан)
+- [x] few_shot из 7 реальных кейсов: 0.572/0.531 — не помог
+- [x] абляция backbone 72B (regex-вердикты): 0.589 val — крупная модель не лечит
+- [x] GEPA light-checkpoint (train=300, 30% маркерных): 0.550 < few_shot →
+      СТОП-ПРАВИЛО: полные H5-прогоны 2×3 ждут решения пользователя
+- [x] tools/marker_signals: матрица вариант×маркер (recall unreliable 0.24–0.29)
+- [x] m6: overlap-резка NLI; сэмплы val+test (446×10); фичи val — идёт
+- [ ] m6 predict (нужны train-сэмплы/фичи — решение по объёму за пользователем)
+- [ ] docs/13 — итоговый отчёт этапа (после m6-val и решения по GEPA)
+
 ## Этап 0 — фундамент
 - [ ] Получить сплиты платформы -> data/processed/ ; проверить схему loader-ом
 - [ ] Получить у кураторов словарь 13 маркеров -> configs/markers.yaml
