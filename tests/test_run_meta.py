@@ -2,7 +2,7 @@
 
 import yaml
 
-from src.common.run_meta import save_run_yaml
+from src.common.run_meta import cost_stats, save_run_yaml
 
 
 def test_run_yaml_redacts_api_key(tmp_path):
@@ -13,3 +13,9 @@ def test_run_yaml_redacts_api_key(tmp_path):
     assert cfg["llm"]["api_key"] == "sk-secret"  # исходный cfg не тронут
     assert d["profile"] == "cloud" and d["seed"] == 0 and d["split"] == "val"
     assert "git_hash" in d
+
+
+def test_cost_stats():
+    s = cost_stats([10, 20, 30], n_calls=2, n_cases=2)
+    assert s["median_ms_per_case"] == 20.0  # медиана длительностей
+    assert s["llm_calls_per_case"] == 1.0  # 2 вызова / 2 кейса
