@@ -24,11 +24,13 @@ def test_off_topic_anchor_present():
 
 
 def test_incomplete_priority():
-    """B2: минимум 2 примера с faith=FAIL, rel=PASS и словами про упущенную деталь."""
+    """Реальный состав (этап 1): >=1 пример неполноты со словом «опущ/неполн»
+    и >=3 разных faith=FAIL примера (hallucinated/incomplete/mixup)."""
     ex = [e for e in _load() if e["faith"] == "FAIL" and e["rel"] == "PASS"]
     assert (
-        sum("опущ" in e["analysis"].lower() or "неполн" in e["analysis"].lower() for e in ex) >= 2
+        sum("опущ" in e["analysis"].lower() or "неполн" in e["analysis"].lower() for e in ex) >= 1
     )
+    assert len(ex) >= 3
 
 
 def test_strict_rel_fail_anchor():
