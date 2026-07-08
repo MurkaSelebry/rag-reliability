@@ -33,6 +33,8 @@ class LLMClient:
         self.profile: str = cfg.get("profile", "local")
         self.model: str = model or llm["model"]
         self.extra_body: dict = dict(llm.get("openrouter_extra_body") or {})
+        # явный opt-in владельца данных (guard.allow_real_data) — см. guard.py
+        self.allow_real: bool = bool((cfg.get("guard") or {}).get("allow_real_data"))
         self.client = OpenAI(base_url=llm["api_base"], api_key=llm["api_key"])
 
     # ---------- низкоуровневый запрос с retry ----------
@@ -106,7 +108,7 @@ class LLMClient:
         """
         # --- guard (A2) ---
         if case is not None:
-            assert_case_cloud_safe(case, self.profile)
+            assert_case_cloud_safe(case, self.profile, allow_real=self.allow_real)
         elif self.profile == "cloud" and not public_data:
             raise DataLeakError(
                 "cloud-профиль: вызов без case и без public_data=True запрещён — "

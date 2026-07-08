@@ -55,7 +55,11 @@ def main() -> None:
     if args.n is not None:
         m6 = {**m6, "n_samples": args.n}
     cases = load_cases(cfg["data"][args.split])
-    assert_cloud_safe(cases, cfg.get("profile", "local"))
+    assert_cloud_safe(
+        cases,
+        cfg.get("profile", "local"),
+        allow_real=bool((cfg.get("guard") or {}).get("allow_real_data")),
+    )
     if args.limit:
         cases = cases[: args.limit]
 

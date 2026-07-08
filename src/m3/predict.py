@@ -73,8 +73,9 @@ def main() -> None:
         ap.error("--prompt-file имеет смысл только при --mode gepa")
     profile = cfg.get("profile", "local")
 
+    allow_real = bool((cfg.get("guard") or {}).get("allow_real_data"))
     cases = load_cases(cfg["data"][args.split])
-    assert_cloud_safe(cases, profile)  # guard на весь файл до первого запроса
+    assert_cloud_safe(cases, profile, allow_real=allow_real)  # guard до первого запроса
     if args.limit is not None:
         cases = cases[: args.limit]
 

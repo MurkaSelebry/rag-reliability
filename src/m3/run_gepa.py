@@ -143,8 +143,9 @@ def main() -> None:
 
     train_cases = load_cases(cfg["data"]["train"])
     val_cases = load_cases(cfg["data"]["val"])
-    assert_cloud_safe(train_cases, profile)  # guard до первого LLM-вызова
-    assert_cloud_safe(val_cases, profile)
+    allow_real = bool((cfg.get("guard") or {}).get("allow_real_data"))
+    assert_cloud_safe(train_cases, profile, allow_real=allow_real)  # guard до 1-го вызова
+    assert_cloud_safe(val_cases, profile, allow_real=allow_real)
 
     # детерминированная подвыборка train (seed прогона); val — целиком
     rng = random.Random(args.seed)
