@@ -59,7 +59,7 @@ def test_run_manual_method_reports_disabled_encoder() -> None:
     )
 
     assert result["available"] is False
-    assert "not wired for single-example inference" in result["error"]
+    assert "Required artifact is missing" in result["error"]
 
 
 def test_method_statuses_include_artifact_paths() -> None:
@@ -68,6 +68,13 @@ def test_method_statuses_include_artifact_paths() -> None:
     assert statuses["dummy_direct"]["available"] is True
     assert statuses["lora_direct"]["artifact"] == "results/adapters_direct"
     assert statuses["lettucedetect"]["artifact"] == "results/lettucedetect/classifier.joblib"
+    assert statuses["encoder"]["artifact"] == "results/encoder_checkpoints_512_best"
+
+
+def test_method_statuses_marks_encoder_available_when_checkpoint_exists(tmp_path: Path) -> None:
+    statuses = serve_demo.method_statuses(encoder_checkpoint=str(tmp_path))
+
+    assert statuses["encoder"]["available"] is True
 
 
 def test_method_choice_labels_show_availability() -> None:
@@ -148,4 +155,21 @@ def test_batch_command_uses_selected_methods() -> None:
     assert command == (
         "python scripts/run_benchmark.py --data data/organizers.jsonl "
         "--methods dummy_direct,dummy_marker --output-dir results/demo_batch"
+    )
+
+
+def test_batch_command_prefers_uploaded_file() -> None:
+    class Uploaded:
+        name = "/tmp/uploaded.jsonl"
+
+    command = serve_demo.build_batch_command(
+        data_path="data/organizers.jsonl",
+        methods=["dummy_direct"],
+        output_dir="results/demo_batch",
+        uploaded_file=Uploaded(),
+    )
+
+    assert command == (
+        "python scripts/run_benchmark.py --data /tmp/uploaded.jsonl "
+        "--methods dummy_direct --output-dir results/demo_batch"
     )

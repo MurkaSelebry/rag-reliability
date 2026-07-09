@@ -90,10 +90,11 @@ make serve-demo
 
 The demo accepts `question`, `context`, `answer`, optional gold labels, and a
 method selector. Methods that need missing artifacts or dependencies return a
-clear unavailable status instead of crashing.
+clear unavailable status instead of crashing; the encoder method can run from a
+configured local checkpoint when one is available.
 It also supports dataset presets, side-by-side method comparison, compact
 correctness display, raw-output inspection, run history, method configuration,
-and batch benchmark command generation.
+and batch benchmark command generation from either a path or uploaded JSONL.
 
 Supervised encoder baseline from the organizer notebook:
 

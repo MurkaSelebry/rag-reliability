@@ -24,6 +24,11 @@ from rag_reliability.prompts import build_direct_prompt, build_marker_prompt
 from rag_reliability.schema import Prediction, RagSample
 
 
+DEMO_CSS = """
+.gradio-container { max-width: 1280px !important; }
+.method-note { color: #555; font-size: 0.92rem; }
+"""
+
 METHODS = (
     "dummy_direct",
     "dummy_marker",
@@ -45,6 +50,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--direct-adapter-path", default="results/adapters_direct")
     parser.add_argument("--marker-adapter-path", default="results/adapters_marker")
     parser.add_argument("--lettucedetect-model", default="results/lettucedetect/classifier.joblib")
+    parser.add_argument("--encoder-model", default="deepvk/RuModernBERT-base")
+    parser.add_argument("--encoder-checkpoint", default="results/encoder_checkpoints_512_best")
+    parser.add_argument("--encoder-max-length", type=int, default=512)
+    parser.add_argument("--encoder-threshold", type=float, default=0.72)
     parser.add_argument("--example-data", default="data/dummy.jsonl")
     return parser.parse_args()
 
@@ -91,6 +100,7 @@ def method_statuses(
     direct_adapter_path: str = "results/adapters_direct",
     marker_adapter_path: str = "results/adapters_marker",
     lettucedetect_model: str = "results/lettucedetect/classifier.joblib",
+    encoder_checkpoint: str = "results/encoder_checkpoints_512_best",
 ) -> dict[str, dict[str, Any]]:
     return {
         "dummy_direct": {"available": True, "artifact": None},
@@ -110,9 +120,8 @@ def method_statuses(
             "artifact": lettucedetect_model,
         },
         "encoder": {
-            "available": False,
-            "artifact": None,
-            "reason": "encoder is trained as a benchmark baseline, not wired for single-example inference",
+            "available": Path(encoder_checkpoint).exists(),
+            "artifact": encoder_checkpoint,
         },
     }
 
@@ -187,6 +196,49 @@ def cached_lettucedetect_artifact(model_path: str):
     return artifact["pipeline"], config, make_detector(config)
 
 
+def resolve_encoder_checkpoint(path: str) -> Path:
+    checkpoint = Path(path)
+    if checkpoint.is_file():
+        return checkpoint
+    if (checkpoint / "model.safetensors").exists() or (checkpoint / "pytorch_model.bin").exists():
+        return checkpoint
+    checkpoint_dirs = sorted(
+        [child for child in checkpoint.glob("checkpoint-*") if child.is_dir()],
+        key=lambda child: int(child.name.rsplit("-", maxsplit=1)[-1]),
+    )
+    return checkpoint_dirs[-1] if checkpoint_dirs else checkpoint
+
+
+@lru_cache(maxsize=2)
+def cached_encoder_artifact(
+    encoder_model: str,
+    encoder_checkpoint: str,
+    max_length: int,
+    threshold: float,
+):
+    import torch  # noqa: PLC0415
+    from transformers import AutoTokenizer  # noqa: PLC0415
+
+    from train_encoder_baseline import build_encoder_text, build_model  # noqa: PLC0415
+
+    checkpoint = resolve_encoder_checkpoint(encoder_checkpoint)
+    model = build_model(encoder_model, pos_weight=1.0)
+    safetensors_path = checkpoint / "model.safetensors"
+    pytorch_path = checkpoint / "pytorch_model.bin"
+    if safetensors_path.exists():
+        from safetensors.torch import load_file  # noqa: PLC0415
+
+        state_dict = load_file(str(safetensors_path))
+    elif pytorch_path.exists():
+        state_dict = torch.load(pytorch_path, map_location="cpu")
+    else:
+        raise FileNotFoundError(f"Encoder checkpoint weights not found under {checkpoint}")
+    model.load_state_dict(state_dict)
+    model.eval()
+    tokenizer = AutoTokenizer.from_pretrained(encoder_model, trust_remote_code=True)
+    return model, tokenizer, build_encoder_text, max_length, threshold
+
+
 def run_prompt_method(
     sample: RagSample,
     mode: str,
@@ -207,6 +259,35 @@ def run_lettucedetect_method(sample: RagSample, artifact_path: str) -> Predictio
     return predictions_from_outputs([sample], np.asarray(pred_y), features)[0]
 
 
+def run_encoder_method(
+    sample: RagSample,
+    encoder_model: str,
+    encoder_checkpoint: str,
+    max_length: int,
+    threshold: float,
+) -> Prediction:
+    import torch  # noqa: PLC0415
+
+    from train_encoder_baseline import predictions_from_probabilities  # noqa: PLC0415
+
+    model, tokenizer, build_encoder_text, cached_max_length, cached_threshold = cached_encoder_artifact(
+        encoder_model,
+        encoder_checkpoint,
+        max_length,
+        threshold,
+    )
+    batch = tokenizer(
+        build_encoder_text(sample),
+        truncation=True,
+        max_length=cached_max_length,
+        return_tensors="pt",
+    )
+    with torch.no_grad():
+        logits = model(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"])["logits"]
+        probability = torch.sigmoid(logits).item()
+    return predictions_from_probabilities([sample], [probability], threshold=cached_threshold)[0]
+
+
 def run_manual_method(  # noqa: PLR0913, PLR0912
     method: str,
     question: str,
@@ -220,8 +301,17 @@ def run_manual_method(  # noqa: PLR0913, PLR0912
     direct_adapter_path: str = "results/adapters_direct",
     marker_adapter_path: str = "results/adapters_marker",
     lettucedetect_model: str = "results/lettucedetect/classifier.joblib",
+    encoder_model: str = "deepvk/RuModernBERT-base",
+    encoder_checkpoint: str = "results/encoder_checkpoints_512_best",
+    encoder_max_length: int = 512,
+    encoder_threshold: float = 0.72,
 ) -> dict[str, Any]:
-    statuses = method_statuses(direct_adapter_path, marker_adapter_path, lettucedetect_model)
+    statuses = method_statuses(
+        direct_adapter_path,
+        marker_adapter_path,
+        lettucedetect_model,
+        encoder_checkpoint,
+    )
     if method not in statuses:
         return {"available": False, "error": f"Unknown method: {method}"}
     status = statuses[method]
@@ -256,6 +346,14 @@ def run_manual_method(  # noqa: PLR0913, PLR0912
             )
         elif method == "lettucedetect":
             prediction = run_lettucedetect_method(sample, lettucedetect_model)
+        elif method == "encoder":
+            prediction = run_encoder_method(
+                sample,
+                encoder_model=encoder_model,
+                encoder_checkpoint=encoder_checkpoint,
+                max_length=encoder_max_length,
+                threshold=encoder_threshold,
+            )
         else:
             return {
                 "available": False,
@@ -345,6 +443,10 @@ def run_manual_methods(  # noqa: PLR0913
     direct_adapter_path: str = "results/adapters_direct",
     marker_adapter_path: str = "results/adapters_marker",
     lettucedetect_model: str = "results/lettucedetect/classifier.joblib",
+    encoder_model: str = "deepvk/RuModernBERT-base",
+    encoder_checkpoint: str = "results/encoder_checkpoints_512_best",
+    encoder_max_length: int = 512,
+    encoder_threshold: float = 0.72,
 ) -> dict[str, Any]:
     normalized_methods = normalize_methods(methods)
     if not normalized_methods:
@@ -369,6 +471,10 @@ def run_manual_methods(  # noqa: PLR0913
             direct_adapter_path=direct_adapter_path,
             marker_adapter_path=marker_adapter_path,
             lettucedetect_model=lettucedetect_model,
+            encoder_model=encoder_model,
+            encoder_checkpoint=encoder_checkpoint,
+            encoder_max_length=encoder_max_length,
+            encoder_threshold=encoder_threshold,
         )
         for method in normalized_methods
     ]
@@ -390,10 +496,28 @@ def update_history(
     return history[-max_rows:]
 
 
-def build_batch_command(data_path: str, methods: list[str] | str | None, output_dir: str) -> str:
+def uploaded_file_path(uploaded_file: Any) -> str | None:
+    if uploaded_file is None:
+        return None
+    if isinstance(uploaded_file, str):
+        return uploaded_file
+    if isinstance(uploaded_file, dict):
+        path = uploaded_file.get("path") or uploaded_file.get("name")
+        return str(path) if path else None
+    name = getattr(uploaded_file, "name", None)
+    return str(name) if name else None
+
+
+def build_batch_command(
+    data_path: str,
+    methods: list[str] | str | None,
+    output_dir: str,
+    uploaded_file: Any = None,
+) -> str:
     normalized_methods = normalize_methods(methods)
+    selected_data = uploaded_file_path(uploaded_file) or data_path
     return (
-        f"python scripts/run_benchmark.py --data {data_path} "
+        f"python scripts/run_benchmark.py --data {selected_data} "
         f"--methods {','.join(normalized_methods)} --output-dir {output_dir}"
     )
 
@@ -411,6 +535,10 @@ def run_ui_methods(  # noqa: PLR0913
     direct_adapter_path: str,
     marker_adapter_path: str,
     lettucedetect_model: str,
+    encoder_model: str,
+    encoder_checkpoint: str,
+    encoder_max_length: int | float,
+    encoder_threshold: int | float,
     old_history: list[dict[str, Any]] | None,
 ) -> tuple[str, list[dict[str, Any]], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     result = run_manual_methods(
@@ -426,6 +554,10 @@ def run_ui_methods(  # noqa: PLR0913
         direct_adapter_path=direct_adapter_path,
         marker_adapter_path=marker_adapter_path,
         lettucedetect_model=lettucedetect_model,
+        encoder_model=encoder_model,
+        encoder_checkpoint=encoder_checkpoint,
+        encoder_max_length=int(encoder_max_length),
+        encoder_threshold=float(encoder_threshold),
     )
     new_history = update_history(old_history, result["rows"])
     return (
@@ -464,13 +596,17 @@ def build_ui(args: argparse.Namespace):
         args.direct_adapter_path,
         args.marker_adapter_path,
         args.lettucedetect_model,
+        args.encoder_checkpoint,
     )
     method_labels = method_choice_labels(statuses)
     initial_examples = example_choices(args.example_data)
 
-    with gr.Blocks(title="RAG Reliability Judge") as demo:
+    with gr.Blocks(title="RAG Reliability Judge", css=DEMO_CSS) as demo:
         gr.Markdown("# RAG Reliability Judge")
-        gr.Markdown("Manual single-example runner for repository methods.")
+        gr.Markdown(
+            "<div class='method-note'>Manual single-example runner with dataset presets, "
+            "multi-method comparison, raw outputs, history, and batch command generation.</div>"
+        )
         with gr.Row():
             methods = gr.CheckboxGroup(
                 choices=method_labels,
@@ -495,12 +631,22 @@ def build_ui(args: argparse.Namespace):
             direct_adapter_path = gr.Textbox(args.direct_adapter_path, label="Direct adapter path")
             marker_adapter_path = gr.Textbox(args.marker_adapter_path, label="Marker adapter path")
             lettucedetect_model = gr.Textbox(args.lettucedetect_model, label="LettuceDetect artifact")
+            encoder_model = gr.Textbox(args.encoder_model, label="Encoder base model")
+            encoder_checkpoint = gr.Textbox(args.encoder_checkpoint, label="Encoder checkpoint")
+            encoder_max_length = gr.Number(
+                args.encoder_max_length,
+                label="Encoder max length",
+                precision=0,
+            )
+            encoder_threshold = gr.Number(args.encoder_threshold, label="Encoder threshold")
 
+        gr.Markdown("## Input")
         question = gr.Textbox(default_question, label="Question / dialog", lines=6)
         context = gr.Textbox(default_context, label="Context", lines=10)
         answer = gr.Textbox(default_answer, label="Answer", lines=5)
         marker = gr.Textbox(default_marker or "none", label="Gold marker")
         run_button = gr.Button("Run method", variant="primary")
+        gr.Markdown("## Results")
         summary = gr.Textbox(label="Summary", lines=6)
         table = gr.Dataframe(label="Comparison", interactive=False)
         raw_output = gr.JSON(label="Raw outputs")
@@ -514,6 +660,7 @@ def build_ui(args: argparse.Namespace):
 
         with gr.Accordion("Batch command", open=False):
             batch_data = gr.Textbox(args.example_data, label="Batch data path")
+            batch_upload = gr.File(label="Optional JSONL upload", file_count="single")
             batch_output_dir = gr.Textbox("results/demo_batch", label="Batch output dir")
             batch_button = gr.Button("Build batch command")
             batch_command = gr.Textbox(label="Command")
@@ -543,13 +690,17 @@ def build_ui(args: argparse.Namespace):
                 direct_adapter_path,
                 marker_adapter_path,
                 lettucedetect_model,
+                encoder_model,
+                encoder_checkpoint,
+                encoder_max_length,
+                encoder_threshold,
                 history_state,
             ],
             outputs=[summary, table, raw_output, details, history_state, history],
         )
         batch_button.click(
             fn=build_batch_command,
-            inputs=[batch_data, methods, batch_output_dir],
+            inputs=[batch_data, methods, batch_output_dir, batch_upload],
             outputs=batch_command,
         )
 
