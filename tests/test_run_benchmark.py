@@ -84,3 +84,74 @@ def test_build_method_commands_for_lora_and_lettucedetect(tmp_path: Path) -> Non
         "data/dummy.jsonl",
     ]
     assert "--model" in lettuce.run_command
+
+
+def test_build_method_commands_for_m3_and_m6(tmp_path: Path) -> None:
+    m3 = run_benchmark.build_method_run(
+        method="m3_zero_shot",
+        data=Path("data/dummy.jsonl"),
+        output_dir=tmp_path,
+        python="python",
+        m3_backend="dummy",
+    )
+    m6 = run_benchmark.build_method_run(
+        method="m6_selfcheck",
+        data=Path("data/dummy.jsonl"),
+        output_dir=tmp_path,
+        python="python",
+        m6_features="results/m6/features.jsonl",
+    )
+
+    assert m3.run_command[0:2] == ["python", "scripts/run_m3.py"]
+    assert "--backend" in m3.run_command
+    assert "dummy" in m3.run_command
+    assert m6.run_command[0:2] == ["python", "scripts/run_m6_selfcheck.py"]
+    assert "--features" in m6.run_command
+    assert "results/m6/features.jsonl" in m6.run_command
+
+
+def test_build_method_commands_for_m3_few_shot_and_gepa(tmp_path: Path) -> None:
+    few_shot = run_benchmark.build_method_run(
+        method="m3_few_shot",
+        data=Path("data/dummy.jsonl"),
+        output_dir=tmp_path,
+        python="python",
+        m3_examples="configs/few_shot.yaml",
+    )
+    gepa = run_benchmark.build_method_run(
+        method="m3_gepa",
+        data=Path("data/dummy.jsonl"),
+        output_dir=tmp_path,
+        python="python",
+        m3_prompt_file="artifacts/m3_optimized_prompt.txt",
+    )
+
+    assert few_shot.run_command[0:2] == ["python", "scripts/run_m3.py"]
+    assert "--mode" in few_shot.run_command
+    assert "few_shot" in few_shot.run_command
+    assert "--examples" in few_shot.run_command
+    assert "configs/few_shot.yaml" in few_shot.run_command
+    assert "--mode" in gepa.run_command
+    assert "gepa" in gepa.run_command
+    assert "--prompt-file" in gepa.run_command
+    assert "artifacts/m3_optimized_prompt.txt" in gepa.run_command
+
+
+def test_build_method_command_for_m3_openai(tmp_path: Path) -> None:
+    run = run_benchmark.build_method_run(
+        method="m3_openai",
+        data=Path("data/dummy.jsonl"),
+        output_dir=tmp_path,
+        python="python",
+        model="remote-judge",
+        m3_api_base="https://example.test/v1",
+        m3_cache_dir="results/m3/cache",
+    )
+
+    assert run.run_command[0:2] == ["python", "scripts/run_m3.py"]
+    assert "--backend" in run.run_command
+    assert "openai" in run.run_command
+    assert "--api-base" in run.run_command
+    assert "https://example.test/v1" in run.run_command
+    assert "--cache-dir" in run.run_command
+    assert "results/m3/cache" in run.run_command

@@ -18,6 +18,7 @@ from rag_reliability.methods.lettucedetect.features import (
     extract_features,
     make_detector,
 )
+from rag_reliability.methods.m3 import build_user_prompt, parse_m3_prediction
 from rag_reliability.mlx_backend import make_generate_fn
 from rag_reliability.parsing import parse_prediction
 from rag_reliability.prompts import build_direct_prompt, build_marker_prompt
@@ -44,6 +45,11 @@ METHODS = (
     "lora_marker",
     "lettucedetect",
     "encoder",
+    "m3_zero_shot",
+    "m3_few_shot",
+    "m3_gepa",
+    "m3_openai",
+    "m6_selfcheck",
 )
 
 
@@ -128,6 +134,26 @@ def method_statuses(
         "encoder": {
             "available": Path(encoder_checkpoint).exists(),
             "artifact": encoder_checkpoint,
+        },
+        "m3_zero_shot": {"available": True, "artifact": "MLX model"},
+        "m3_few_shot": {
+            "available": Path("configs/few_shot.yaml").exists(),
+            "artifact": "configs/few_shot.yaml",
+        },
+        "m3_gepa": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: requires an evolved prompt file",
+        },
+        "m3_openai": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: requires OpenAI-compatible endpoint configuration",
+        },
+        "m6_selfcheck": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: requires precomputed Method 6 feature JSONL",
         },
     }
 
@@ -258,6 +284,16 @@ def run_prompt_method(
     return parse_prediction(raw_output, sample.id, expect_marker=(mode == "marker"))
 
 
+def run_m3_method(sample: RagSample, model: str, max_tokens: int, mode: str = "zero_shot") -> Prediction:
+    from rag_reliability.methods.m3 import build_system_prompt  # noqa: PLC0415
+
+    generate_fn = cached_generate_fn(model, max_tokens, adapter_path=None)
+    system_prompt = build_system_prompt(mode, examples_path="configs/few_shot.yaml")
+    prompt = f"{system_prompt}\n\n{build_user_prompt(sample)}"
+    raw_output = generate_fn(prompt)
+    return parse_m3_prediction(raw_output, sample.id)
+
+
 def run_lettucedetect_method(sample: RagSample, artifact_path: str) -> Prediction:
     pipeline, config, detector = cached_lettucedetect_artifact(artifact_path)
     features = extract_features([sample], detector, config.threshold, desc="features/manual")
@@ -359,6 +395,15 @@ def run_manual_method(  # noqa: PLR0913, PLR0912
                 encoder_checkpoint=encoder_checkpoint,
                 max_length=encoder_max_length,
                 threshold=encoder_threshold,
+            )
+        elif method == "m3_zero_shot":
+            prediction = run_m3_method(sample, model=model, max_tokens=max_tokens)
+        elif method == "m3_few_shot":
+            prediction = run_m3_method(
+                sample,
+                model=model,
+                max_tokens=max_tokens,
+                mode="few_shot",
             )
         else:
             return {

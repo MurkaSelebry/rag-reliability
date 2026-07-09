@@ -4,15 +4,18 @@ Part of the team project **"Assessing the Reliability of Responses in RAG
 Systems"** @SMILES-2026. Given `QUESTION`, `CONTEXT`, `ANSWER`, the methods
 predict whether the answer is reliable (`reliable = faithfulness AND relevance`).
 
-Three methods are compared:
+Implemented method families:
 
 - **Method 1 — direct** (`mode=direct`): the model outputs
   `{"faithfulness": 0|1, "relevance": 0|1}`.
 - **Method 2 — marker** (`mode=marker`): the model additionally names the
   error type first: `{"marker": "...", "faithfulness": 0|1, "relevance": 0|1}`.
-- **Method 3 — LettuceDetect features**: LettuceDetect token-level scores are
+- **LettuceDetect features**: LettuceDetect token-level scores are
   aggregated into three features, then a logistic regression predicts
   faithfulness and relevance.
+- **Method 3/6 imports from `m3-m6`**: Method 3 prompt judge and Method 6
+  SelfCheck-style feature scoring are integrated through the shared
+  predictions/metrics contract.
 
 ## Documentation map
 
@@ -22,6 +25,7 @@ Three methods are compared:
 | [docs/data.md](docs/data.md) | Sample schema, marker vocabulary, dummy dataset, plugging in the real dataset |
 | [docs/training.md](docs/training.md) | LoRA workflow, configs, why `--mask-prompt`, scaling up |
 | [docs/lettucedetect.md](docs/lettucedetect.md) | LettuceDetect feature extraction + logistic regression |
+| [docs/m3_m6.md](docs/m3_m6.md) | Selective Method 3/6 port from the `m3-m6` branch |
 | [docs/experiments.md](docs/experiments.md) | All results so far, how to reproduce, environment gotchas |
 
 ## Quickstart
@@ -34,8 +38,10 @@ make install                    # uv venv + core/dev deps
 make install-mlx                # optional, Apple Silicon: mlx backend + LoRA
 make install-lettucedetect      # optional: LettuceDetect feature method
 make install-encoder            # optional: RuModernBERT supervised baseline
+make install-m6                 # optional: Method 6 NLI/embedding features
+make install-cloud              # optional: OpenAI-compatible Method 3 backend
 make install-demo               # optional: local Gradio demo UI
-make check                      # tests (65, no MLX required) + lint
+make check                      # tests + lint
 make help                       # all shortcuts: dummy, baselines, LoRA, eval
 ```
 
@@ -77,9 +83,18 @@ python scripts/run_benchmark.py \
 ```
 
 Supported methods: `dummy_direct`, `dummy_marker`, `prompt_direct`,
-`prompt_marker`, `lora_direct`, `lora_marker`, `lettucedetect`, `encoder`.
+`prompt_marker`, `lora_direct`, `lora_marker`, `lettucedetect`, `encoder`,
+`m3_zero_shot`, `m3_few_shot`, `m3_gepa`, `m3_openai`, `m6_selfcheck`.
 Each method writes `predictions.jsonl`; the shared evaluator then writes
 `metrics.json`.
+
+`m3_zero_shot`, `m3_few_shot`, and `m3_gepa` are Method 3 judge prompt modes
+ported from the `m3-m6` branch.
+`m3_openai` runs the Method 3 zero-shot prompt through an OpenAI-compatible
+chat completions endpoint with a local file cache.
+`m6_selfcheck` consumes a precomputed Method 6 feature JSONL via
+`--m6-features`; sample generation, NLI scoring, and calibration remain explicit
+preparation steps instead of hidden benchmark side effects.
 
 Manual local demo UI:
 
@@ -138,6 +153,9 @@ reliability macro-F1 `0.5879`.
 - ✅ Organizer encoder baseline is reproducible at `max_length=512` with a
   held-out test set, no class weighting, 3 epochs, and validation-selected
   threshold.
+- ✅ Method 3/6 code from `m3-m6` is being integrated selectively into the
+  shared prediction/evaluation contract without replacing the current package
+  layout.
 - ⏳ Next: real Method 1 vs Method 2 fine-tuning comparison and targeted
   hyperparameter tuning around the 512-token encoder setup.
 

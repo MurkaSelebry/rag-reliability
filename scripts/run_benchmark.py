@@ -20,6 +20,11 @@ METHODS = (
     "lora_marker",
     "lettucedetect",
     "encoder",
+    "m3_zero_shot",
+    "m3_few_shot",
+    "m3_gepa",
+    "m3_openai",
+    "m6_selfcheck",
 )
 
 
@@ -53,6 +58,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--encoder-epochs", type=float, default=3)
     parser.add_argument("--encoder-learning-rate", type=float, default=2e-5)
     parser.add_argument("--encoder-pos-weight-mode", choices=["balanced", "none"], default="none")
+    parser.add_argument("--m3-backend", choices=["dummy", "mlx", "openai"], default="mlx")
+    parser.add_argument("--m3-max-tokens", type=int, default=400)
+    parser.add_argument("--m3-max-context-chars", type=int, default=None)
+    parser.add_argument("--m3-examples", default="configs/few_shot.yaml")
+    parser.add_argument("--m3-prompt-file", default="artifacts/m3_optimized_prompt.txt")
+    parser.add_argument("--m3-api-base", default="http://localhost:8000/v1")
+    parser.add_argument("--m3-api-key-env", default="OPENAI_API_KEY")
+    parser.add_argument("--m3-cache-dir", default="results/m3/cache")
+    parser.add_argument("--m6-features", default="results/m6/features.jsonl")
+    parser.add_argument("--m6-contradiction-threshold", type=float, default=0.5)
+    parser.add_argument("--m6-entropy-threshold", type=float, default=1.0)
+    parser.add_argument("--m6-relevance-threshold", type=float, default=0.25)
     return parser.parse_args()
 
 
@@ -99,6 +116,18 @@ def build_method_run(  # noqa: PLR0913, PLR0912
     encoder_epochs: float = 3,
     encoder_learning_rate: float = 2e-5,
     encoder_pos_weight_mode: str = "none",
+    m3_backend: str = "mlx",
+    m3_max_tokens: int = 400,
+    m3_max_context_chars: int | None = None,
+    m3_examples: str = "configs/few_shot.yaml",
+    m3_prompt_file: str = "artifacts/m3_optimized_prompt.txt",
+    m3_api_base: str = "http://localhost:8000/v1",
+    m3_api_key_env: str = "OPENAI_API_KEY",
+    m3_cache_dir: str = "results/m3/cache",
+    m6_features: str = "results/m6/features.jsonl",
+    m6_contradiction_threshold: float = 0.5,
+    m6_entropy_threshold: float = 1.0,
+    m6_relevance_threshold: float = 0.25,
 ) -> MethodRun:
     if method not in METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {METHODS}")
@@ -171,7 +200,7 @@ def build_method_run(  # noqa: PLR0913, PLR0912
             "--output",
             str(predictions_path),
         ]
-    else:
+    elif method == "encoder":
         checkpoint_dir = encoder_output_dir or str(run_dir / "checkpoints")
         command = [
             python,
@@ -196,6 +225,59 @@ def build_method_run(  # noqa: PLR0913, PLR0912
             str(encoder_learning_rate),
             "--pos-weight-mode",
             encoder_pos_weight_mode,
+        ]
+    elif method.startswith("m3_"):
+        m3_mode = "zero_shot" if method == "m3_openai" else method.removeprefix("m3_")
+        backend = "openai" if method == "m3_openai" else m3_backend
+        command = [
+            python,
+            "scripts/run_m3.py",
+            "--data",
+            str(data),
+            "--output",
+            str(predictions_path),
+            "--mode",
+            m3_mode,
+            "--backend",
+            backend,
+            "--model",
+            model,
+            "--max-tokens",
+            str(m3_max_tokens),
+        ]
+        if method == "m3_openai":
+            command.extend(
+                [
+                    "--api-base",
+                    m3_api_base,
+                    "--api-key-env",
+                    m3_api_key_env,
+                    "--cache-dir",
+                    m3_cache_dir,
+                ]
+            )
+        if method == "m3_few_shot":
+            command.extend(["--examples", m3_examples])
+        elif method == "m3_gepa":
+            command.extend(["--prompt-file", m3_prompt_file])
+        if m3_max_context_chars is not None:
+            command.extend(["--max-context-chars", str(m3_max_context_chars)])
+    else:
+        command = [
+            python,
+            "scripts/run_m6_selfcheck.py",
+            "--data",
+            str(data),
+            "--features",
+            m6_features,
+            "--output",
+            str(predictions_path),
+            "--contradiction-threshold",
+            str(m6_contradiction_threshold),
+            "--entropy-threshold",
+            str(m6_entropy_threshold),
+            "--relevance-threshold",
+            str(m6_relevance_threshold),
         ]
 
     return MethodRun(
@@ -233,6 +315,18 @@ def main() -> None:
             encoder_epochs=args.encoder_epochs,
             encoder_learning_rate=args.encoder_learning_rate,
             encoder_pos_weight_mode=args.encoder_pos_weight_mode,
+            m3_backend=args.m3_backend,
+            m3_max_tokens=args.m3_max_tokens,
+            m3_max_context_chars=args.m3_max_context_chars,
+            m3_examples=args.m3_examples,
+            m3_prompt_file=args.m3_prompt_file,
+            m3_api_base=args.m3_api_base,
+            m3_api_key_env=args.m3_api_key_env,
+            m3_cache_dir=args.m3_cache_dir,
+            m6_features=args.m6_features,
+            m6_contradiction_threshold=args.m6_contradiction_threshold,
+            m6_entropy_threshold=args.m6_entropy_threshold,
+            m6_relevance_threshold=args.m6_relevance_threshold,
         )
         for method in parse_methods(args.methods)
     ]
