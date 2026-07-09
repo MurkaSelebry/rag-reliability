@@ -97,3 +97,20 @@ def test_compute_pos_weight_can_be_disabled() -> None:
 
 def test_compute_pos_weight_balances_positive_majority() -> None:
     assert encoder_baseline.compute_pos_weight([1, 1, 1, 0], mode="balanced") == 1 / 3
+
+
+def test_predictions_from_probabilities_export_standard_prediction_shape() -> None:
+    samples = [make_sample(1, 1), make_sample(0, 1)]
+
+    predictions = encoder_baseline.predictions_from_probabilities(
+        samples,
+        probabilities=[0.8, 0.2],
+        threshold=0.5,
+    )
+
+    assert [prediction.id for prediction in predictions] == [sample.id for sample in samples]
+    assert predictions[0].faithfulness_pred == 1
+    assert predictions[0].relevance_pred == 1
+    assert predictions[0].raw_output == "encoder_probability=0.800000; threshold=0.500000"
+    assert predictions[1].faithfulness_pred == 0
+    assert predictions[1].relevance_pred == 0

@@ -19,14 +19,19 @@ import numpy as np
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from rag_reliability.dataset import load_jsonl
-from rag_reliability.schema import RagSample
+from rag_reliability.dataset import load_jsonl, save_jsonl
+from rag_reliability.schema import Prediction, RagSample
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", default="data/organizers.jsonl", help="Input RagSample jsonl")
     parser.add_argument("--output", default="results/encoder_baseline_metrics.json")
+    parser.add_argument(
+        "--predictions-output",
+        default=None,
+        help="Optional standard Prediction JSONL for the held-out test split",
+    )
     parser.add_argument("--model", default="deepvk/RuModernBERT-base")
     parser.add_argument("--output-dir", default="results/encoder_checkpoints")
     parser.add_argument("--test-size", type=float, default=0.2)
@@ -122,6 +127,35 @@ def compute_pos_weight(labels: list[int], mode: str) -> float:
         return 1.0
     positives = sum(labels)
     return (len(labels) - positives) / max(positives, 1)
+
+
+def predictions_from_probabilities(
+    samples: list[RagSample],
+    probabilities: list[float] | np.ndarray,
+    threshold: float,
+) -> list[Prediction]:
+    """Export encoder reliability scores as standard Prediction records.
+
+    The encoder is a binary reliability classifier, not a separate
+    faithfulness/relevance classifier. For the shared evaluator we map
+    reliable=1 to (faithfulness=1, relevance=1), and reliable=0 to (0, 0).
+    """
+    predictions: list[Prediction] = []
+    for sample, probability in zip(samples, probabilities, strict=True):
+        probability_float = float(probability)
+        reliable_pred = int(probability_float >= threshold)
+        predictions.append(
+            Prediction(
+                id=sample.id,
+                faithfulness_pred=reliable_pred,
+                relevance_pred=reliable_pred,
+                raw_output=(
+                    f"encoder_probability={probability_float:.6f}; "
+                    f"threshold={threshold:.6f}"
+                ),
+            )
+        )
+    return predictions
 
 
 def set_seed(seed: int) -> None:
@@ -239,6 +273,11 @@ def train_and_evaluate(args: argparse.Namespace) -> dict[str, float | int | str]
     y_prob = torch.sigmoid(torch.tensor(logits)).numpy()
     y_true = np.asarray(test_ds["labels"], dtype=int)
     metrics = compute_binary_metrics(y_true, y_prob, threshold=threshold)
+    if args.predictions_output is not None:
+        save_jsonl(
+            predictions_from_probabilities(test_samples, y_prob, threshold=threshold),
+            args.predictions_output,
+        )
     metrics.update(
         {
             "model": args.model,

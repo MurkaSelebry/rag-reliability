@@ -34,7 +34,8 @@ make install                    # uv venv + core/dev deps
 make install-mlx                # optional, Apple Silicon: mlx backend + LoRA
 make install-lettucedetect      # optional: LettuceDetect feature method
 make install-encoder            # optional: RuModernBERT supervised baseline
-make check                      # tests (50, no MLX required) + lint
+make install-demo               # optional: local Gradio demo UI
+make check                      # tests (65, no MLX required) + lint
 make help                       # all shortcuts: dummy, baselines, LoRA, eval
 ```
 
@@ -65,6 +66,34 @@ python scripts/run_prompt_baseline.py \
 
 LoRA fine-tuning: see [docs/training.md](docs/training.md). LettuceDetect
 feature-classifier training: see [docs/lettucedetect.md](docs/lettucedetect.md).
+
+Unified benchmark interface:
+
+```bash
+python scripts/run_benchmark.py \
+  --data data/dummy.jsonl \
+  --methods dummy_direct,dummy_marker \
+  --output-dir results/benchmark_dummy
+```
+
+Supported methods: `dummy_direct`, `dummy_marker`, `prompt_direct`,
+`prompt_marker`, `lora_direct`, `lora_marker`, `lettucedetect`, `encoder`.
+Each method writes `predictions.jsonl`; the shared evaluator then writes
+`metrics.json`.
+
+Manual local demo UI:
+
+```bash
+make install-demo
+make serve-demo
+```
+
+The demo accepts `question`, `context`, `answer`, optional gold labels, and a
+method selector. Methods that need missing artifacts or dependencies return a
+clear unavailable status instead of crashing.
+It also supports dataset presets, side-by-side method comparison, compact
+correctness display, raw-output inspection, run history, method configuration,
+and batch benchmark command generation.
 
 Supervised encoder baseline from the organizer notebook:
 
@@ -119,7 +148,7 @@ configs/                LoRA training configs (direct, marker)
 src/rag_reliability/    schema, prompts, formatting, parsing, metrics,
                         dataset IO, dummy predictors, mlx backend, methods
 scripts/                CLI entry points — run from repo root
-tests/                  unit tests (50, no MLX required)
+tests/                  unit tests (65, no MLX required)
 docs/                   architecture / data / training / experiments
 results/                predictions, metrics, adapters (gitignored)
 ```

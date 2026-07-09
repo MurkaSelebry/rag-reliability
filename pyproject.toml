@@ -40,6 +40,10 @@ encoder = [
     "datasets>=2.18",
     "pandas>=2.0",
 ]
+demo = [
+    "gradio>=4.0,<6",
+    "huggingface-hub>=0.34,<1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

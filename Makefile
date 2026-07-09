@@ -12,7 +12,7 @@ ENCODER_POS_WEIGHT_MODE ?= none
 .PHONY: help install install-mlx install-lettucedetect test lint check dummy \
         install-encoder baseline-direct baseline-marker encoder-baseline train-direct \
         train-marker train-lettucedetect infer-direct infer-marker infer-lettucedetect \
-        eval-all clean
+        install-demo serve-demo benchmark-dummy eval-all clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -29,6 +29,9 @@ install-lettucedetect: ## Add LettuceDetect feature-classifier deps
 
 install-encoder: ## Add supervised encoder baseline deps
 	uv pip install -e ".[encoder]"
+
+install-demo: ## Add local Gradio demo deps
+	uv pip install -e ".[demo]"
 
 test: ## Run unit tests
 	$(PY) -m pytest -q
@@ -102,6 +105,14 @@ infer-lettucedetect: ## Inference with LettuceDetect classifier + evaluation
 	$(PY) scripts/evaluate.py --data $(DATA) \
 		--predictions results/lettucedetect/predictions.jsonl \
 		--output results/lettucedetect/metrics.json
+
+serve-demo: ## Local manual web UI
+	$(PY) scripts/serve_demo.py
+
+benchmark-dummy: ## Unified benchmark smoke test with dummy methods
+	$(PY) scripts/run_benchmark.py --data $(DATA) \
+		--methods dummy_direct,dummy_marker \
+		--output-dir results/benchmark_dummy
 
 eval-all: ## Print every metrics json in results/
 	@for f in results/*_metrics.json; do echo "== $$f"; cat "$$f"; done

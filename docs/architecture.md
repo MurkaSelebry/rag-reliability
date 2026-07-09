@@ -18,6 +18,17 @@ data (jsonl) ──► feature extraction ──► classifier ──► evaluat
   dataset.py       methods/lettucedetect  Prediction    metrics.py
 ```
 
+`scripts/run_benchmark.py` is the shared operational interface. It runs each
+supported method into the same artifact layout:
+
+```
+results/<benchmark>/<method>/predictions.jsonl ──► metrics.json
+```
+
+`scripts/serve_demo.py` is the manual local UI. It accepts one
+question/context/answer triple, runs a selected method, and displays the
+standard `Prediction` payload plus optional gold-label correctness.
+
 ## Modules (`src/rag_reliability/`)
 
 | Module | Responsibility |
@@ -40,6 +51,8 @@ data (jsonl) ──► feature extraction ──► classifier ──► evaluat
 | `infer.py` | Same as the mlx baseline but loads a trained LoRA adapter (`--adapter-path`). Output format is identical, so `evaluate.py` works for both. |
 | `infer_lettucedetect.py` | Runs a trained LettuceDetect logistic-regression classifier and writes standard predictions. |
 | `evaluate.py` | Predictions + gold → metrics json. |
+| `run_benchmark.py` | Unified runner for dummy, prompt, LoRA, LettuceDetect, and encoder methods; every method is normalized to `Prediction` JSONL before evaluation. |
+| `serve_demo.py` | Local Gradio UI for manually running one sample through a selected method. |
 | `train_direct_lora.py` / `train_marker_lora.py` | Prepare SFT splits and print the exact `mlx_lm.lora` command (they do not train themselves). |
 | `train_lettucedetect.py` | Extracts LettuceDetect features and trains the logistic-regression classifier. |
 | `prepare_data.py` | Raw dataset → `RagSample` jsonl (see [data.md](data.md)). |
