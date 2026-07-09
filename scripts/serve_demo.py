@@ -25,7 +25,13 @@ from rag_reliability.schema import Prediction, RagSample
 
 
 DEMO_CSS = """
-.gradio-container { max-width: 1280px !important; }
+.gradio-container {
+    max-width: 1280px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+}
 .method-note { color: #555; font-size: 0.92rem; }
 """
 
