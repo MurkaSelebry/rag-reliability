@@ -24,7 +24,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data", default="data/dummy.jsonl", help="Labeled dataset (jsonl)")
     parser.add_argument("--predictions", required=True, help="Predictions file (jsonl)")
     parser.add_argument("--output", default="results/metrics.json", help="Where to save metrics")
+    parser.add_argument("--limit", type=int, default=None, help="Evaluate only the first N samples")
     return parser.parse_args()
+
+
+def apply_limit(items: list, limit: int | None) -> list:
+    return items if limit is None else items[:limit]
 
 
 def load_predictions(path: str | Path) -> list[Prediction]:
@@ -46,7 +51,7 @@ def load_predictions(path: str | Path) -> list[Prediction]:
 
 def main() -> None:
     args = parse_args()
-    samples = load_jsonl(args.data)
+    samples = apply_limit(load_jsonl(args.data), args.limit)
     predictions = load_predictions(args.predictions)
 
     result = evaluate_predictions(samples, predictions)

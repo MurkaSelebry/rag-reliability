@@ -41,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", default="data/dummy.jsonl", help="Input RagSample JSONL")
     parser.add_argument("--output-dir", default="results/benchmark", help="Where to write runs")
+    parser.add_argument("--limit", type=int, default=None, help="Run only the first N samples")
     parser.add_argument(
         "--methods",
         default="dummy_direct,dummy_marker",
@@ -86,8 +87,9 @@ def build_evaluate_command(
     data: Path,
     predictions_path: Path,
     metrics_path: Path,
+    limit: int | None = None,
 ) -> list[str]:
-    return [
+    command = [
         python,
         "scripts/evaluate.py",
         "--data",
@@ -97,6 +99,9 @@ def build_evaluate_command(
         "--output",
         str(metrics_path),
     ]
+    if limit is not None:
+        command.extend(["--limit", str(limit)])
+    return command
 
 
 def build_method_run(  # noqa: PLR0913, PLR0912
@@ -128,6 +133,7 @@ def build_method_run(  # noqa: PLR0913, PLR0912
     m6_contradiction_threshold: float = 0.5,
     m6_entropy_threshold: float = 1.0,
     m6_relevance_threshold: float = 0.25,
+    limit: int | None = None,
 ) -> MethodRun:
     if method not in METHODS:
         raise ValueError(f"Unknown method {method!r}; expected one of {METHODS}")
@@ -152,6 +158,8 @@ def build_method_run(  # noqa: PLR0913, PLR0912
             "--dummy-strategy",
             "keyword" if mode == "marker" else "always_reliable",
         ]
+        if limit is not None:
+            command.extend(["--limit", str(limit)])
     elif method.startswith("prompt_"):
         mode = method.removeprefix("prompt_")
         command = [
@@ -170,6 +178,8 @@ def build_method_run(  # noqa: PLR0913, PLR0912
             "--max-tokens",
             str(max_tokens),
         ]
+        if limit is not None:
+            command.extend(["--limit", str(limit)])
     elif method.startswith("lora_"):
         mode = method.removeprefix("lora_")
         adapter_path = direct_adapter_path if mode == "direct" else marker_adapter_path
@@ -262,6 +272,8 @@ def build_method_run(  # noqa: PLR0913, PLR0912
             command.extend(["--prompt-file", m3_prompt_file])
         if m3_max_context_chars is not None:
             command.extend(["--max-context-chars", str(m3_max_context_chars)])
+        if limit is not None:
+            command.extend(["--limit", str(limit)])
     else:
         command = [
             python,
@@ -279,13 +291,15 @@ def build_method_run(  # noqa: PLR0913, PLR0912
             "--relevance-threshold",
             str(m6_relevance_threshold),
         ]
+        if limit is not None:
+            command.extend(["--limit", str(limit)])
 
     return MethodRun(
         name=method,
         predictions_path=predictions_path,
         metrics_path=metrics_path,
         run_command=command,
-        evaluate_command=build_evaluate_command(python, data, predictions_path, metrics_path),
+        evaluate_command=build_evaluate_command(python, data, predictions_path, metrics_path, limit),
     )
 
 
@@ -327,6 +341,7 @@ def main() -> None:
             m6_contradiction_threshold=args.m6_contradiction_threshold,
             m6_entropy_threshold=args.m6_entropy_threshold,
             m6_relevance_threshold=args.m6_relevance_threshold,
+            limit=args.limit,
         )
         for method in parse_methods(args.methods)
     ]

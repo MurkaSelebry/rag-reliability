@@ -155,3 +155,19 @@ def test_build_method_command_for_m3_openai(tmp_path: Path) -> None:
     assert "https://example.test/v1" in run.run_command
     assert "--cache-dir" in run.run_command
     assert "results/m3/cache" in run.run_command
+
+
+def test_build_method_run_passes_limit_to_runner_and_evaluator(tmp_path: Path) -> None:
+    run = run_benchmark.build_method_run(
+        method="m3_zero_shot",
+        data=Path("data/organizers.jsonl"),
+        output_dir=tmp_path,
+        python="python",
+        m3_backend="dummy",
+        limit=25,
+    )
+
+    assert "--limit" in run.run_command
+    assert "25" in run.run_command
+    assert "--limit" in run.evaluate_command
+    assert "25" in run.evaluate_command

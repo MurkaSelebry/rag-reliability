@@ -17,12 +17,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--contradiction-threshold", type=float, default=0.5)
     parser.add_argument("--entropy-threshold", type=float, default=1.0)
     parser.add_argument("--relevance-threshold", type=float, default=0.25)
+    parser.add_argument("--limit", type=int, default=None)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     samples = load_jsonl(args.data)
+    if args.limit is not None:
+        samples = samples[: args.limit]
     features = load_features(args.features)
     predictions = predictions_from_feature_rows(
         samples,
