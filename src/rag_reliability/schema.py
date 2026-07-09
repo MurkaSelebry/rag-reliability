@@ -13,6 +13,19 @@ ALLOWED_MARKERS: tuple[str, ...] = (
     "context_mixing",
     "contradiction",
     "unsupported_claim",
+    "reason_hallucinated_fact",
+    "reason_off_topic_answer",
+    "reason_irrelevant_chunk_used",
+    "reason_chunk_fact_mixup",
+    "reason_incomplete_answer",
+    "reason_false_verification",
+    "reason_outdated_fact",
+    "reason_answer_for_operator",
+    "reason_other",
+    "reason_reveals_ai_identity",
+    "reason_wrong_navigation",
+    "reason_missed_complaint_handoff",
+    "reason_missed_chunk_conditions",
 )
 
 

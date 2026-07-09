@@ -23,7 +23,7 @@ data (jsonl) ──► feature extraction ──► classifier ──► evaluat
 | Module | Responsibility |
 |---|---|
 | `schema.py` | Pydantic models: `RagSample` (input + gold labels), `Prediction` (parsed model output), `EvaluationResult` (metrics). `reliable = faithfulness AND relevance` is a derived property on both sides. |
-| `prompts.py` | English judge prompts for both modes; `ALLOWED_MARKERS` is the single source of truth for the marker vocabulary. |
+| `prompts.py` | English judge prompts for both modes; prompts handle either a single question or a full dialog in the `QUESTION` section. |
 | `formatting.py` | Builds SFT targets and `{"prompt", "completion"}` training records; `resolve_marker()` implements the `none`/`unknown` fallback used by both training and evaluation. |
 | `parsing.py` | Raw LLM text → `Prediction`. Three-stage fallback: balanced-JSON extraction → regex → conservative `(0, 0, invalid_output=True)`. Never raises on model output. |
 | `metrics.py` | Macro-F1 for reliable/faithfulness/relevance; marker F1 + confusion (marker mode only). Joins predictions to samples by `id`, raises on missing ids. |
@@ -45,6 +45,10 @@ data (jsonl) ──► feature extraction ──► classifier ──► evaluat
 | `prepare_data.py` | Raw dataset → `RagSample` jsonl (see [data.md](data.md)). |
 
 ## Methods
+
+`schema.py::ALLOWED_MARKERS` is the single source of truth for the marker
+vocabulary. It includes both the original compact markers used by the dummy
+dataset and the official organizer `reason_*` markers.
 
 - **Method 1 — direct** (`mode=direct`): model outputs
   `{"faithfulness": 0|1, "relevance": 0|1}`.

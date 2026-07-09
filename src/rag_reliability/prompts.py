@@ -16,8 +16,8 @@ Faithfulness:
 0 = the answer contains unsupported claims, contradicts the context, mixes facts incorrectly, or omits essential context.
 
 Relevance:
-1 = the answer directly addresses the user's question.
-0 = the answer is off-topic, incomplete, or does not answer the question."""
+1 = the answer directly addresses the user's question or latest client request in the dialog.
+0 = the answer is off-topic, incomplete, asks a clarifying question instead of answering, or does not answer the request."""
 
 
 def _payload(sample: RagSample) -> str:
@@ -36,6 +36,8 @@ def build_direct_prompt(sample: RagSample) -> str:
     return f"""You are a strict evaluator of RAG answers.
 
 Evaluate whether the ANSWER is faithful to the CONTEXT and relevant to the QUESTION.
+The QUESTION section may contain either a single user question or a full dialog;
+when it is a dialog, evaluate relevance against the latest client request.
 
 {_DEFINITIONS}
 
@@ -51,6 +53,8 @@ def build_marker_prompt(sample: RagSample) -> str:
     return f"""You are a strict evaluator of RAG answers.
 
 Evaluate whether the ANSWER is faithful to the CONTEXT and relevant to the QUESTION.
+The QUESTION section may contain either a single user question or a full dialog;
+when it is a dialog, evaluate relevance against the latest client request.
 Also classify the error type of the answer with a marker.
 
 {_DEFINITIONS}

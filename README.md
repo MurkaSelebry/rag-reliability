@@ -32,8 +32,9 @@ except the `mlx` backend runs anywhere.
 ```bash
 make install                    # uv venv + core/dev deps
 make install-mlx                # optional, Apple Silicon: mlx backend + LoRA
-uv pip install -e ".[lettucedetect]"  # optional: LettuceDetect feature method
-make check                      # tests (37, no MLX required) + lint
+make install-lettucedetect      # optional: LettuceDetect feature method
+make install-encoder            # optional: RuModernBERT supervised baseline
+make check                      # tests (50, no MLX required) + lint
 make help                       # all shortcuts: dummy, baselines, LoRA, eval
 ```
 
@@ -65,6 +66,21 @@ python scripts/run_prompt_baseline.py \
 LoRA fine-tuning: see [docs/training.md](docs/training.md). LettuceDetect
 feature-classifier training: see [docs/lettucedetect.md](docs/lettucedetect.md).
 
+Supervised encoder baseline from the organizer notebook:
+
+```bash
+python scripts/prepare_data.py \
+  --input from_organizators/data/data.zip \
+  --output data/organizers.jsonl
+
+python scripts/train_encoder_baseline.py \
+  --data data/organizers.jsonl \
+  --output results/encoder_baseline_512_best_metrics.json \
+  --output-dir results/encoder_checkpoints_512_best \
+  --max-length 512 --batch-size 4 \
+  --epochs 3 --learning-rate 2e-5 --pos-weight-mode none
+```
+
 ## Metrics
 
 Reported by `scripts/evaluate.py`:
@@ -79,14 +95,21 @@ Reported by `scripts/evaluate.py`:
 Current best on dummy data: zero-shot direct `reliable_f1 = 0.86`
 (full table + caveats in [docs/experiments.md](docs/experiments.md)).
 
+Current best on organizer data: RuModernBERT encoder at `max_length=512`,
+3 epochs, no positive-class weighting, and a validation-selected threshold:
+reliability macro-F1 `0.5879`.
+
 ## Status
 
 - ✅ Pipeline (data → prompt → inference → parsing → metrics) built and
   verified end-to-end: dummy backends, zero-shot MLX baseline, LoRA training
   + adapter inference — all with 0% invalid outputs.
-- ⏳ Waiting on the real dataset: `prepare_data.py` column mapping + CSV
-  branch, real Method 1 vs Method 2 comparison, hyperparameter tuning
-  (see [docs/data.md](docs/data.md)).
+- ✅ Organizer CSV/ZIP dataset format is supported by `prepare_data.py`.
+- ✅ Organizer encoder baseline is reproducible at `max_length=512` with a
+  held-out test set, no class weighting, 3 epochs, and validation-selected
+  threshold.
+- ⏳ Next: real Method 1 vs Method 2 fine-tuning comparison and targeted
+  hyperparameter tuning around the 512-token encoder setup.
 
 ## Project layout
 
@@ -96,7 +119,7 @@ configs/                LoRA training configs (direct, marker)
 src/rag_reliability/    schema, prompts, formatting, parsing, metrics,
                         dataset IO, dummy predictors, mlx backend, methods
 scripts/                CLI entry points — run from repo root
-tests/                  unit tests (37, no MLX required)
+tests/                  unit tests (50, no MLX required)
 docs/                   architecture / data / training / experiments
 results/                predictions, metrics, adapters (gitignored)
 ```

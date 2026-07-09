@@ -3,10 +3,16 @@
 PY := .venv/bin/python
 DATA ?= data/dummy.jsonl
 MODEL ?= mlx-community/Qwen2.5-1.5B-Instruct-4bit
+ENCODER_MAX_LENGTH ?= 512
+ENCODER_BATCH_SIZE ?= 4
+ENCODER_EPOCHS ?= 3
+ENCODER_LEARNING_RATE ?= 2e-5
+ENCODER_POS_WEIGHT_MODE ?= none
 
 .PHONY: help install install-mlx install-lettucedetect test lint check dummy \
-        baseline-direct baseline-marker train-direct train-marker train-lettucedetect \
-        infer-direct infer-marker infer-lettucedetect eval-all clean
+        install-encoder baseline-direct baseline-marker encoder-baseline train-direct \
+        train-marker train-lettucedetect infer-direct infer-marker infer-lettucedetect \
+        eval-all clean
 
 help: ## List available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -20,6 +26,9 @@ install-mlx: ## Add MLX backend + LoRA training deps (Apple Silicon)
 
 install-lettucedetect: ## Add LettuceDetect feature-classifier deps
 	uv pip install -e ".[lettucedetect]"
+
+install-encoder: ## Add supervised encoder baseline deps
+	uv pip install -e ".[encoder]"
 
 test: ## Run unit tests
 	$(PY) -m pytest -q
@@ -52,6 +61,14 @@ baseline-marker: ## Zero-shot MLX baseline, marker mode
 	$(PY) scripts/evaluate.py --data $(DATA) \
 		--predictions results/qwen_marker_predictions.jsonl \
 		--output results/qwen_marker_metrics.json
+
+encoder-baseline: ## Supervised RuModernBERT reliability classifier
+	$(PY) scripts/train_encoder_baseline.py --data $(DATA) \
+		--output results/encoder_baseline_512_best_metrics.json \
+		--output-dir results/encoder_checkpoints_512_best \
+		--max-length $(ENCODER_MAX_LENGTH) --batch-size $(ENCODER_BATCH_SIZE) \
+		--epochs $(ENCODER_EPOCHS) --learning-rate $(ENCODER_LEARNING_RATE) \
+		--pos-weight-mode $(ENCODER_POS_WEIGHT_MODE)
 
 train-direct: ## Prepare direct SFT splits and print the mlx_lm.lora command
 	$(PY) scripts/train_direct_lora.py --data $(DATA)
