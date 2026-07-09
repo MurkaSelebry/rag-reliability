@@ -27,6 +27,13 @@ mlx = [
     # (TOKENIZER_MAPPING.register gets a str config_class)
     "transformers<5",
 ]
+encoder = [
+    "accelerate>=0.26.0",
+    "torch>=2.2",
+    "transformers>=4.40,<5",
+    "datasets>=2.18",
+    "pandas>=2.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -37,6 +44,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["from_organizators"]
 
 [tool.mypy]
 python_version = "3.11"

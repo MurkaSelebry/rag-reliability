@@ -25,6 +25,13 @@ def test_invalid_marker_rejected() -> None:
         make_sample(marker="halucination")  # typo must not reach training data
 
 
+def test_official_organizer_markers_accepted() -> None:
+    assert make_sample(marker="reason_hallucinated_fact").marker == "reason_hallucinated_fact"
+    assert make_sample(marker="reason_missed_chunk_conditions").marker == (
+        "reason_missed_chunk_conditions"
+    )
+
+
 def test_prediction_marker_free_form() -> None:
     # Model output markers stay free-form: bad values must show up in
     # metrics/confusion, not crash the pipeline.
