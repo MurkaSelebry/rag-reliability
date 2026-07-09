@@ -1,5 +1,5 @@
 model: mlx-community/Qwen2.5-1.5B-Instruct-4bit
-max_seq_length: 2048
+max_seq_length: 4096
 batch_size: 1
 grad_accumulation_steps: 8
 learning_rate: 0.0001

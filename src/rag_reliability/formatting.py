@@ -46,3 +46,14 @@ def build_training_record(sample: RagSample, mode: str) -> dict[str, str]:
     if mode == "marker":
         return {"prompt": build_marker_prompt(sample), "completion": build_marker_target(sample)}
     raise ValueError(f"Unknown mode {mode!r}, expected one of {MODES}")
+
+
+def build_chat_training_record(sample: RagSample, mode: str) -> dict[str, list[dict[str, str]]]:
+    """One SFT chat record compatible with mlx_lm's ChatDataset."""
+    record = build_training_record(sample, mode)
+    return {
+        "messages": [
+            {"role": "user", "content": record["prompt"]},
+            {"role": "assistant", "content": record["completion"]},
+        ]
+    }
