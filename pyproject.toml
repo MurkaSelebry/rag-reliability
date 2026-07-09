@@ -27,6 +27,12 @@ mlx = [
     # (TOKENIZER_MAPPING.register gets a str config_class)
     "transformers<5",
 ]
+lettucedetect = [
+    "lettucedetect",
+    "torch",
+    "transformers<5",
+    "joblib>=1.3",
+]
 encoder = [
     "accelerate>=0.26.0",
     "torch>=2.2",
