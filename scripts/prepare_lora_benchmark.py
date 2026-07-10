@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from random import Random
 from typing import NamedTuple
 
 import yaml
@@ -37,6 +38,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-question-chars", type=int, default=2000)
     parser.add_argument("--max-context-chars", type=int, default=5000)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--balance-train-labels",
+        action="store_true",
+        help="Balance the four (faithfulness, relevance) training-label pairs",
+    )
+    parser.add_argument(
+        "--target-per-label",
+        type=int,
+        default=None,
+        help="Examples per training-label pair; required with --balance-train-labels",
+    )
     return parser.parse_args()
 
 
@@ -58,9 +70,13 @@ def prepare_benchmark(
     batch_size: int,
     max_question_chars: int | None = 2000,
     max_context_chars: int | None = 5000,
+    balance_train_labels: bool = False,
+    target_per_label: int | None = None,
 ) -> BenchmarkPreparation:
     if epochs < 1 or batch_size < 1:
         raise ValueError(f"epochs and batch_size must be >= 1, got {epochs}, {batch_size}")
+    if balance_train_labels and target_per_label is None:
+        raise ValueError("target_per_label is required when balance_train_labels is enabled")
 
     train, val, test = split_samples(
         samples,
@@ -72,6 +88,9 @@ def prepare_benchmark(
     output_path = Path(output_dir)
     mlx_data_dir = output_path / f"lora_{mode}"
     raw_test_path = output_path / f"{mode}_test_samples.jsonl"
+
+    if balance_train_labels:
+        train = balance_training_labels(train, seed, target_per_label)
 
     sft_train = truncate_samples_for_sft(train, max_question_chars, max_context_chars)
     sft_val = truncate_samples_for_sft(val, max_question_chars, max_context_chars)
@@ -101,6 +120,37 @@ def truncate_text(text: str, max_chars: int | None) -> str:
     if max_chars is None or len(text) <= max_chars:
         return text
     return text[:max_chars]
+
+
+def balance_training_labels(
+    samples: list[RagSample],
+    seed: int,
+    target_per_label: int,
+) -> list[RagSample]:
+    """Return a deterministic equal-size sample for each direct judgement pair."""
+    if target_per_label < 1:
+        raise ValueError(f"target_per_label must be >= 1, got {target_per_label}")
+
+    labels = ((0, 0), (0, 1), (1, 0), (1, 1))
+    grouped = {label: [] for label in labels}
+    for sample in samples:
+        grouped[(sample.faithfulness, sample.relevance)].append(sample)
+
+    empty_labels = [label for label, group in grouped.items() if not group]
+    if empty_labels:
+        raise ValueError(f"cannot balance absent training labels: {empty_labels}")
+
+    rng = Random(seed)
+    balanced: list[RagSample] = []
+    for label in labels:
+        group = grouped[label]
+        rng.shuffle(group)
+        if len(group) >= target_per_label:
+            balanced.extend(group[:target_per_label])
+        else:
+            balanced.extend(rng.choice(group) for _ in range(target_per_label))
+    rng.shuffle(balanced)
+    return balanced
 
 
 def truncate_samples_for_sft(
@@ -167,6 +217,8 @@ def main() -> None:
         batch_size=int(config["batch_size"]),
         max_question_chars=args.max_question_chars,
         max_context_chars=args.max_context_chars,
+        balance_train_labels=args.balance_train_labels,
+        target_per_label=args.target_per_label,
     )
 
     print(

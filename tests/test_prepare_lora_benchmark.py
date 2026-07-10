@@ -16,14 +16,14 @@ assert _SPEC.loader is not None
 _SPEC.loader.exec_module(prepare_lora_benchmark)
 
 
-def make_sample(index: int, reliable: bool) -> RagSample:
+def make_sample(index: int, reliable: bool, relevance: int = 1) -> RagSample:
     return RagSample(
         id=f"sample_{index:03d}",
         question=f"Вопрос {index}",
         context=f"Контекст {index}",
         answer=f"Ответ {index}",
         faithfulness=1 if reliable else 0,
-        relevance=1,
+        relevance=relevance,
         marker="none" if reliable else "reason_hallucinated_fact",
     )
 
@@ -124,3 +124,26 @@ def test_prepare_lora_benchmark_truncates_long_dialog_and_context(tmp_path: Path
     assert "[QUESTION]\nqqqqq\n\n[CONTEXT]\nccccccc" in user_message
     assert "qqqqqq" not in user_message
     assert "cccccccc" not in user_message
+
+
+def test_balance_training_labels_equalizes_four_judgement_pairs() -> None:
+    samples = [make_sample(i, reliable=True, relevance=1) for i in range(5)]
+    samples += [make_sample(i + 10, reliable=False, relevance=1) for i in range(3)]
+    samples += [make_sample(i + 20, reliable=False, relevance=0) for i in range(2)]
+    samples += [make_sample(30, reliable=True, relevance=0)]
+
+    balanced = prepare_lora_benchmark.balance_training_labels(
+        samples,
+        seed=7,
+        target_per_label=3,
+    )
+
+    pairs = [(sample.faithfulness, sample.relevance) for sample in balanced]
+    assert len(balanced) == 12
+    assert {pair: pairs.count(pair) for pair in set(pairs)} == {
+        (1, 1): 3,
+        (0, 1): 3,
+        (0, 0): 3,
+        (1, 0): 3,
+    }
+    assert [sample.id for sample in balanced] == [sample.id for sample in prepare_lora_benchmark.balance_training_labels(samples, seed=7, target_per_label=3)]
