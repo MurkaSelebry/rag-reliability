@@ -81,6 +81,26 @@ Current stopping point:
   to 0.4668, but marker fine-tuning is not useful for the marker-label task:
   marker macro-F1 is only 0.0761 and it predicts `none` for every held-out row.
 
+## Direct LoRA controlled sweep (organizer data, 2026-07-10)
+
+The direct LoRA training set is dominated by `(faithfulness=1, relevance=1)`
+labels: 1622 of 2245 total rows. Both the original two-epoch run and a new
+one-epoch run predicted `(1, 1)` for every held-out example. To isolate this
+effect, a second run used a deterministic balanced SFT train set with 256 rows
+per `(faithfulness, relevance)` pair (1024 rows total); validation and the
+seed-42 225-row test split were unchanged.
+
+| Run | reliable_f1_macro | faithfulness_f1_macro | relevance_f1_macro | invalid |
+|---|---:|---:|---:|---:|
+| Qwen zero-shot, direct | **0.4701** | **0.4739** | 0.4238 | 0 / 225 |
+| LoRA, one epoch, unbalanced | 0.4186 | 0.4201 | **0.4668** | 0 / 225 |
+| LoRA, two epochs, balanced 256×4 | 0.4636 | 0.4669 | **0.4668** | 0 / 225 |
+
+Balancing improves reliability by 0.0450 macro-F1 over the unbalanced LoRA
+run and prevents its all-positive faithfulness collapse: the balanced model
+outputs `(1, 1)` for 133 samples and `(0, 1)` for 92. It still never predicts
+`relevance=0`, so it does not beat the direct zero-shot baseline overall.
+
 ## Reading the numbers
 
 - `always_reliable` at 0.28 is the trivial floor (dataset is ~39% reliable);
