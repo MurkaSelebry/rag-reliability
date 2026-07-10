@@ -52,6 +52,15 @@ Organizer direct/marker LoRA benchmark files are prepared under
 records (`{"messages": [...]}`), because the installed `mlx_lm` chat-template
 path fails on prompt/completion records when `--mask-prompt` is enabled.
 
+Held-out test results on the shared 225-sample split:
+
+| Run | reliable_f1_macro | faithfulness_f1_macro | relevance_f1_macro | marker_f1_macro | invalid |
+|---|---:|---:|---:|---:|---:|
+| Qwen zero-shot, direct | **0.4701** | **0.4739** | 0.4238 | — | 0 / 225 |
+| Qwen zero-shot, marker | 0.3513 | 0.3477 | 0.2399 | 0.0136 | 0 / 225 |
+| LoRA, direct | 0.4186 | 0.4201 | **0.4668** | — | 0 / 225 |
+| LoRA, marker | 0.4186 | 0.4201 | **0.4668** | 0.0761 | 0 / 225 |
+
 Current stopping point:
 
 - `max_seq_length=2048` is not viable for organizer SFT. Many prompts exceed
@@ -63,9 +72,14 @@ Current stopping point:
   5000 characters, and LoRA configs use `max_seq_length=4096`. This keeps the
   generated direct train records under 4096 tokens (observed max: 3192) and
   started training cleanly.
-- The first direct run with these settings was intentionally stopped at
-  iter 90 / 3592. Last observed train loss was 0.067, peak memory 14.464 GB.
-  No adapter from this interrupted run should be treated as a benchmark result.
+- Fresh organizer adapters were trained to completion for 3592 iterations each
+  under `results/adapters_direct_rerun/` and `results/adapters_marker_rerun/`.
+  Both use the same model, seed-42 train/validation/test split, learning rate,
+  batch size, and sequence-length settings.
+- The fully trained direct and marker adapters both fall below zero-shot direct
+  on reliability and faithfulness macro-F1. They increase relevance macro-F1
+  to 0.4668, but marker fine-tuning is not useful for the marker-label task:
+  marker macro-F1 is only 0.0761 and it predicts `none` for every held-out row.
 
 ## Reading the numbers
 
@@ -85,6 +99,9 @@ Current stopping point:
 - On organizer data, direct zero-shot Qwen is only slightly above trivial
   baselines. The supervised encoder is stronger, and threshold tuning gives a
   small but real macro-F1 gain without changing the model.
+- On the organizer held-out LoRA split, neither completed LoRA variant improves
+  Method 1: zero-shot direct is better on reliability and faithfulness macro-F1
+  with no invalid outputs. The LoRA gain is limited to relevance macro-F1.
 - Disabling positive-class weighting helped. The dataset has a positive
   majority, and the balanced `pos_weight<1` made the model too eager to trade
   minority recall against overall calibration.
