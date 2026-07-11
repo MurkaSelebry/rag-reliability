@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from src.common.config import load_config, load_dotenv
+from rag_reliability.common.config import load_config, load_dotenv
 
 
 def _write(tmp_path, name, text):

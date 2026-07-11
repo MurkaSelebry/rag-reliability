@@ -1,16 +1,37 @@
-# данные и артефакты не коммитим (правило проекта); *.dvc-указатели — коммитим
+# Данные и артефакты не коммитим (правило проекта); *.dvc-указатели — коммитим
 artifacts/*
 !artifacts/*.dvc
-data/*
+#data/*
 !data/*.dvc
-# секреты
+
+# Секреты
 .env
+
 # mlflow file-store (локальный трекинг)
 mlruns/
-# python
+
+# Python
 __pycache__/
-*.pyc
-.pytest_cache/
+*.py[cod]
 *.egg-info/
+build/
+dist/
+
+# Окружения
 .venv/
+venv/
+
+# Кэши инструментов
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .superpowers/
+
+# OS
+.DS_Store
+
+# Локальная копия репозитория-примера (не часть этого репо)
+/rag-reliability/
+
+# Служебные каталоги Claude Code
+.claude/worktrees/

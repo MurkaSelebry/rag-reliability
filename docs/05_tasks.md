@@ -5,26 +5,26 @@
 - [x] Поддержка в загрузчике конфига: подстановка ${VAR} и проброс openrouter_extra_body
 - [x] Smoke-тест logprobs провайдера (top_logprobs на токенах вердикта)
 - [x] Guard в LLM-клиенте: cloud-профиль + не-synthetic данные = ошибка
-- [x] tools/make_pseudo_corpus.py по спецификации docs/07.2 (+ ручная проверка 5×4 кейсов)
+- [x] scripts/make_pseudo_corpus.py по спецификации docs/07.2 (+ ручная проверка 5×4 кейсов)
 - [x] Прогон m3 zero_shot и m6 (20 кейсов) на псевдо-корпусе; проверка сигналов из docs/07.3
 
 ## Этап −0.5 — GEPA (cloud; docs/10)
 - [x] configs/few_shot.yaml: 7 примеров с якорями обеих осей (B1/B2); приёмка на val
       (off_topic p_faith 0.202→0.240 — порог 0.5 не взят, ограничение 7B-судьи; rel-сигнал сохранён)
-- [x] tools/make_figs.py: боксплоты по kind, reliability, f1(t), scatter m6 (+тесты логики)
+- [x] scripts/make_figs.py: боксплоты по kind, reliability, f1(t), scatter m6 (+тесты логики)
 - [x] configs/config.cloud.yaml m3.gepa; run_gepa.py (метрика ±markers, глосс из yaml); gepa_report.py; predict --prompt-file/--variant-name
 - [x] GEPA smoke: auto=light, train=50 (checkpoint: ≤ few_shot → medium НЕ запускался, docs/10 §3)
 - [x] H5-механика: gepa_markers/gepa_plain × 2 seed, train=100 auto=light (репетиция механики, не проверка H5)
-- [x] tools/entropy_ablation.py: абляция thr×N из кэша (0 LLM-вызовов); интерпретация в docs/10 §4
+- [x] scripts/entropy_ablation.py: абляция thr×N из кэша (0 LLM-вызовов); интерпретация в docs/10 §4
 - [x] docs/10_gepa_stage.md — итоговый отчёт этапа
 
 ## Этап −0.25 — viz & scale (cloud; docs/11)
 - [x] Гигиена: pyproject (ruff/pytest/deps), uv venv, pre-commit, CI + no-data-leak job
-- [x] src/common/results_index.py — единый индекс прогонов (5 DataFrame, тесты)
-- [x] tools/make_report.py — интерактивный self-contained HTML (plotly inline, 11 секций)
-- [x] tools/explorer.py — Streamlit-обозреватель (Кейсы/Разногласия/m6/GEPA-промпты)
-- [x] src/common/async_llm.py + --concurrency в m3.predict и m6.sample (замер 3.5×; кэш общий с sync)
-- [x] src/common/tracking.py (mlflow file-store) + хук в predict; backfill 12 ранов
+- [x] src/rag_reliability/common/results_index.py — единый индекс прогонов (5 DataFrame, тесты)
+- [x] scripts/make_report.py — интерактивный self-contained HTML (plotly inline, 11 секций)
+- [x] scripts/explorer.py — Streamlit-обозреватель (Кейсы/Разногласия/m6/GEPA-промпты)
+- [x] src/rag_reliability/common/async_llm.py + --concurrency в m3.predict и m6.sample (замер 3.5×; кэш общий с sync)
+- [x] src/rag_reliability/common/tracking.py (mlflow file-store) + хук в predict; backfill 12 ранов
 - [x] dvc init + dvc.yaml (pseudo→predict→report), локальный remote-плейсхолдер
 - [x] docs/11_viz_scale.md — итоги, принятые/отклонённые инструменты
 
@@ -32,7 +32,7 @@
 - [x] data.zip → data/raw/alfa; адаптер alfa_loader (2245 кейсов, id=alfa_+sha1)
 - [x] guard: реальные кейсы блокируются в cloud; явный opt-in allow_real_data (разрешение владельца)
 - [x] configs/markers.yaml — реальные 13 reason_* с глоссами кураторов
-- [x] EDA (tools/eda_alfa): баланс, 2×2, маркеры×оси, длины, дубли, сравнение с псевдо
+- [x] EDA (scripts/eda_alfa.py): баланс, 2×2, маркеры×оси, длины, дубли, сравнение с псевдо
 - [x] provisional-сплиты: group-aware 1787/223/223 + curator-режим 1796/449
 - [x] бейзлайны: majority 0.430/0.405, surface 0.613/0.598 (f1_reliable val/test);
       surface+e5 и curator-encoder — прогоны идут
@@ -45,7 +45,7 @@
 - [x] абляция backbone 72B (regex-вердикты): 0.589 val — крупная модель не лечит
 - [x] GEPA light-checkpoint (train=300, 30% маркерных): 0.550 < few_shot →
       СТОП-ПРАВИЛО: полные H5-прогоны 2×3 ждут решения пользователя
-- [x] tools/marker_signals: матрица вариант×маркер (recall unreliable 0.24–0.29)
+- [x] scripts/marker_signals.py: матрица вариант×маркер (recall unreliable 0.24–0.29)
 - [x] m6: overlap-резка NLI; сэмплы val+test (446×10) в кэше; фичи — «до GPU» (>8 мин/кейс CPU)
 - [ ] m6 predict (нужны train-сэмплы/фичи — решение по объёму за пользователем)
 - [x] docs/13 — итоговый отчёт этапа до стоп-правил (решения за пользователем)

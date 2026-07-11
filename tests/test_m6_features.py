@@ -4,7 +4,12 @@ import math
 
 import pytest
 
-from src.m6.features import entropy_features, selfcheck_scores, semantic_clusters, sentences
+from rag_reliability.methods.m6.features import (
+    entropy_features,
+    selfcheck_scores,
+    semantic_clusters,
+    sentences,
+)
 
 
 class StubNLI:

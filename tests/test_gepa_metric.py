@@ -2,7 +2,7 @@
 
 import dspy
 
-from src.m3.run_gepa import load_marker_gloss, make_metric
+from rag_reliability.methods.m3.run_gepa import load_marker_gloss, make_metric
 
 
 def _gold(f="PASS", r="FAIL", markers=()):

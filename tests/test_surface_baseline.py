@@ -1,7 +1,7 @@
 """Поверхностные фичи: длины, overlap, извлечение — без моделей."""
 
-from src.baselines.surface import ngram_overlap, surface_features
-from src.common.schemas import Case
+from rag_reliability.baselines.surface import ngram_overlap, surface_features
+from rag_reliability.common.schemas import Case
 
 
 def test_ngram_overlap_bounds():

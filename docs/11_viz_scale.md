@@ -21,17 +21,17 @@
 
 | Компонент | Файлы | Команда |
 |---|---|---|
-| Единый индекс прогонов | `src/common/results_index.py` | `build_index()` → 5 DataFrame (runs/predictions/m6_features/gepa/entropy_ablation) |
-| Интерактивный HTML-отчёт | `tools/make_report.py` | `python -m tools.make_report --root . --out artifacts/report/index.html` |
-| Обозреватель кейсов | `tools/explorer.py` | `streamlit run tools/explorer.py` (локально) |
-| Async-клиент | `src/common/async_llm.py` | `--concurrency N` в `src.m3.predict` и `src.m6.sample` |
-| MLflow-трекинг | `src/common/tracking.py` | `mlflow ui --backend-store-uri file:./mlruns` |
+| Единый индекс прогонов | `src/rag_reliability/common/results_index.py` | `build_index()` → 5 DataFrame (runs/predictions/m6_features/gepa/entropy_ablation) |
+| Интерактивный HTML-отчёт | `scripts/make_report.py` | `python scripts/make_report.py --root . --out artifacts/report/index.html` |
+| Обозреватель кейсов | `scripts/explorer.py` | `streamlit run scripts/explorer.py` (локально) |
+| Async-клиент | `src/rag_reliability/common/async_llm.py` | `--concurrency N` в `scripts/run_m3.py` и `scripts/prepare_m6_samples.py` |
+| MLflow-трекинг | `src/rag_reliability/common/tracking.py` | `mlflow ui --backend-store-uri file:./mlruns` |
 | DVC-DAG | `dvc.yaml` | `dvc repro report` |
 | Гигиена | `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml` | `ruff check .`, `pre-commit run -a` |
 
 Тесты: **73 passed** (62 прежних + 11 новых: индекс 4, async 2, tracking 2, логика
 отчёта 3). Всё дерево прогнано через `ruff check --fix` + `ruff format` (единственное
-исключение — `src/m3/prompts.py`: текст промптов не переносим, E501 per-file-ignore —
+исключение — `src/rag_reliability/methods/m3/prompts.py`: текст промптов не переносим, E501 per-file-ignore —
 смена текста инвалидировала бы кэш судьи).
 
 ### HTML-отчёт (`artifacts/report/index.html`, ~4.9 МБ, plotly.js inline — без сети)
@@ -89,7 +89,7 @@ Guard как в синхронном клиенте: `assert_cloud_safe` по в
 - `tracking.log_run(...)`: file-store `file:./mlruns` (в .gitignore), flatten-конфиг c
   редакцией `api_key → ***` (переиспользован `_redact` из run_meta), метрики из report,
   артефакты (report json, run.yaml), теги (variant/split/method). Вызов встроен в
-  `src.m3.predict` и `src.m6.predict` под флагом `tracking.enabled` (в local-конфиге
+  `scripts/run_m3.py` и `scripts/run_m6_selfcheck.py` под флагом `tracking.enabled` (в local-конфиге
   выключен по умолчанию — ноль побочных эффектов). Backfill сделан перепрогоном 12
   прогонов m3 по кэшу (0 LLM-вызовов): mlflow содержит 6 вариантов × val/test.
   Установленный MLflow требует `MLFLOW_ALLOW_FILE_STORE=true` — выставляется в

@@ -1,7 +1,7 @@
 """Санити eval_local на синтетических предсказаниях (docs/05 этап 0)."""
 
-from src.common.eval_local import evaluate, fit_thresholds
-from src.common.schemas import Case, Pred
+from rag_reliability.common.eval_local import evaluate, fit_thresholds
+from rag_reliability.common.schemas import Case, Pred
 
 
 def _mk(n_good=20, n_bad=20):

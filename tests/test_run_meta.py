@@ -2,7 +2,7 @@
 
 import yaml
 
-from src.common.run_meta import cost_stats, save_run_yaml
+from rag_reliability.common.run_meta import cost_stats, save_run_yaml
 
 
 def test_run_yaml_redacts_api_key(tmp_path):

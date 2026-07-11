@@ -2,9 +2,9 @@
 
 import pytest
 
-from src.common.guard import DataLeakError
-from src.common.llm_client import LLMClient
-from src.common.schemas import Case
+from rag_reliability.common.guard import DataLeakError
+from rag_reliability.common.llm_client import LLMClient
+from rag_reliability.common.schemas import Case
 
 CFG = {
     "profile": "cloud",

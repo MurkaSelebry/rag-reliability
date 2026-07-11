@@ -2,7 +2,7 @@
 
 import json
 
-from src.m6.sample import _need_samples
+from rag_reliability.methods.m6.sample import _need_samples
 
 
 def test_need_samples_topup(tmp_path):

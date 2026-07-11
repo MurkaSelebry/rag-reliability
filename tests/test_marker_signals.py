@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from tools.marker_signals import cell_2x2_table, per_marker_recall
+from rag_reliability.analysis.marker_signals import cell_2x2_table, per_marker_recall
 
 
 def _preds():

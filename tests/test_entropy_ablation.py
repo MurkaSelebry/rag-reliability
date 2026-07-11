@@ -1,6 +1,6 @@
 """Абляция: кластеры при нескольких порогах и N из одной NLI-матрицы."""
 
-from tools.entropy_ablation import cluster_features_multi
+from rag_reliability.methods.m6.entropy_ablation import cluster_features_multi
 
 
 class StubNLI:

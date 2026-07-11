@@ -1,45 +1,71 @@
-[project]
-name = "rag-reliability-m3m6"
-version = "0.0.0"
-description = "Методы 3 (LLM-as-judge/GEPA) и 6 (SelfCheck+entropy) проекта RAG-reliability"
-requires-python = ">=3.11"
-# Зависимости — зеркало requirements.txt (тот остаётся источником для CI/pip).
-dependencies = [
-    "openai>=1.40",
-    "dspy>=2.6.14",
-    "transformers>=4.44",
-    "torch>=2.3",
-    "sentence-transformers>=3.0",
-    "scikit-learn>=1.4",
-    "numpy",
-    "pyyaml",
-    "tqdm",
-    "razdel",
-    "pytest",
-    "datasets>=2.20",
-    "matplotlib",
-    "plotly",
-    "streamlit",
-    "mlflow",
-    "dvc",
-    "pandas",
-]
-
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-# «Плоский» src-layout: пакеты внутри src/, но импорт как `src.common...` (как в тестах).
-packages = ["src", "src.common", "src.m3", "src.m6", "tools"]
+[project]
+name = "rag-reliability-m3m6"
+version = "0.1.0"
+description = "Методы 3 (LLM-as-judge/GEPA) и 6 (SelfCheck+entropy) проекта RAG-reliability"
+requires-python = ">=3.11"
+# Ядро — только то, что нужно чистой логике и клиенту LLM; тяжёлые стеки — в extras.
+dependencies = [
+    "openai>=1.40",        # клиент к vLLM/OpenRouter (OpenAI-совместимый API)
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+    "tqdm>=4.66",
+    "scikit-learn>=1.4",   # eval_local, пороги, фичи
+    "pandas>=2.0",         # results_index, загрузка корпуса
+    "razdel>=0.5",         # русская сентенизация (Метод 6)
+]
 
-# torch ставится отдельным шагом с CPU-индексом
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "pre-commit>=3.6",
+    "mlflow>=2.12",        # нужен тестам tracking (файловый стор, без сервера)
+]
+gepa = [
+    "dspy>=2.6.14",
+]
+# torch ставится отдельным шагом с CPU-индексом при необходимости
 # (`uv pip install --index-url https://download.pytorch.org/whl/cpu torch`);
 # смешивать индексы в общем резолве uv отказывается (No solution found).
+m6 = [
+    "torch>=2.3",
+    "transformers>=4.44",
+    "sentence-transformers>=3.0",
+]
+encoder = [
+    "torch>=2.3",
+    "transformers>=4.44",
+]
+viz = [
+    "matplotlib>=3.8",
+    "plotly>=5.20",
+    "streamlit>=1.35",
+]
+tracking = [
+    "mlflow>=2.12",
+]
+data = [
+    "datasets>=2.20",      # SberQuAD для псевдо-корпуса
+    "dvc>=3.50",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# тесты работают и без editable-установки (запуск из корня репо)
+pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-extend-exclude = ["reference_src"]
+# reference_src — референс платформы; data/baseline.ipynb — ноутбук организаторов
+extend-exclude = ["reference_src", "data/baseline.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
@@ -49,8 +75,4 @@ ignore = ["E741"]
 [tool.ruff.lint.per-file-ignores]
 # Текст промптов — семантика, не код: не переносим строки (смена текста = смена
 # промпта и инвалидация кэша судьи).
-"src/m3/prompts.py" = ["E501"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-q"
+"src/rag_reliability/methods/m3/prompts.py" = ["E501"]

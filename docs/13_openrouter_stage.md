@@ -70,7 +70,7 @@ supervised-веток (RuModernBERT кураторов: f1-macro 0.62 на их 
   агрегация max) — длинные реальные чанки больше не теряют сигнал при усечении.
 - **Фичи на CPU нереальны**: замер — >8 мин/кейс (446 кейсов ≈ 60+ часов; длинные
   сэмплы × NLI-пары × окна). Помечено **«до GPU»**: на GPU mDeBERTa считает это
-  минутами; пайплайн готов (`python -m src.m6.features --config configs/config.alfa_cloud.yaml --split val`).
+  минутами; пайплайн готов (`python scripts/prepare_m6_features.py --config configs/config.alfa_cloud.yaml --split val`).
 - train-сэмплы (для p_rel-логрега) не закупались до решения по объёму (полные
   1787×10 или подвыборка 800 — план допускает).
 

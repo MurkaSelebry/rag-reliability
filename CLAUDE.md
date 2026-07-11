@@ -25,33 +25,36 @@
 ## Команды
 
 ```bash
-# окружение
-pip install -r requirements.txt
+# окружение: uv venv + ядро/dev; тяжёлые стеки — отдельными extras
+make install            # = uv venv && uv pip install -e ".[dev]"
+make install-m6         # NLI/эмбеддинги Метода 6 (torch, transformers, sbert)
+make install-gepa       # DSPy для GEPA
+make help               # все цели: методы, бейзлайны, отчёты
 
 # vLLM (поднимается вручную, вне этого репо):
 #   vllm serve Qwen/Qwen2.5-7B-Instruct --port 8000 --max-model-len 16384
 
-# тесты (обязательны перед коммитом)
-pytest tests/ -x -q
+# тесты + линт (обязательны перед коммитом)
+make check              # = pytest && ruff check .
 
 # Метод 3
-python -m src.m3.predict --mode zero_shot --split val
-python -m src.m3.run_gepa            # оптимизация промпта
-python -m src.m3.predict --mode gepa --split test
+python scripts/run_m3.py --mode zero_shot --split val
+python scripts/run_gepa.py --variant markers --seed 0   # оптимизация промпта
+python scripts/run_m3.py --mode gepa --split test
 
 # Метод 6
-python -m src.m6.sample --split val
-python -m src.m6.features --split val
-python -m src.m6.predict
+python scripts/prepare_m6_samples.py --split val
+python scripts/prepare_m6_features.py --split val
+python scripts/run_m6_selfcheck.py
 ```
 
-Если модулей ещё нет — их предстоит создать по спецификациям из docs; CLI-интерфейсы должны соответствовать перечисленным выше.
+Логика живёт в пакете `src/rag_reliability/` (`common/`, `data/`, `baselines/`, `analysis/`, `methods/m3`, `methods/m6`); `scripts/` — тонкие CLI-обёртки над `main()` модулей. Новые CLI делать по той же схеме.
 
 ## Стиль кода
 
 - Python 3.11+, type hints везде, dataclass для структур данных.
 - Конфигурация — только `configs/config.yaml`; никаких магических констант в коде (пороги, N сэмплов, имена моделей — всё из конфига).
-- Каждый скрипт — идемпотентный CLI-модуль (`python -m src...` с argparse), пригодный к прерыванию/продолжению.
+- Каждая CLI-точка входа — тонкая обёртка в `scripts/` над идемпотентным модулем пакета (argparse, пригоден к прерыванию/продолжению).
 - Тяжёлые импорты (torch, transformers, sentence_transformers) — лениво, внутри функций, чтобы чистая логика была тестируемой без GPU.
 - Для чистой логики (агрегация фич, кластеризация, подбор порогов, парсинг вердиктов) — юнит-тесты в `tests/` со стабами вместо моделей. Писать тест вместе с функцией, не после.
 - Комментарии и докстринги — на русском, коротко и по делу.
@@ -71,8 +74,8 @@ python -m src.m6.predict
 ## Чего НЕ делать
 
 - Не оптимизировать промпты/гиперпараметры по dev-test.
-- Не менять `src/common/eval_local.py` после его создания без явного запроса — он повторяет замороженный evaluate.py платформы.
-- Не добавлять зависимости без необходимости; список — `requirements.txt`.
+- Не менять `src/rag_reliability/common/eval_local.py` после его создания без явного запроса — он повторяет замороженный evaluate.py платформы.
+- Не добавлять зависимости без необходимости; список — `pyproject.toml` (ядро + extras: dev/gepa/m6/encoder/viz/tracking/data). Тяжёлое — только в extras.
 - Не запускать полные прогоны на всём датасете без предварительного smoke-теста на 5–10 кейсах (флаг `--limit N` обязателен во всех CLI).
 - Не коммитить содержимое `artifacts/` и `data/` (в .gitignore).
 

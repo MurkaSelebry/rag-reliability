@@ -4,7 +4,12 @@ import math
 
 import pytest
 
-from src.common.llm_client import JudgeClient, _pass_prob, _verdict_positions, extract_verdict_probs
+from rag_reliability.common.llm_client import (
+    JudgeClient,
+    _pass_prob,
+    _verdict_positions,
+    extract_verdict_probs,
+)
 
 
 def tok(token, logprob=-0.1, top=None):

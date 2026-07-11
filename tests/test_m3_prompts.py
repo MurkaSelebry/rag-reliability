@@ -1,6 +1,6 @@
 """SEED_INSTRUCTION обязан содержать правило независимости осей (итог этапа −1)."""
 
-from src.m3.prompts import SEED_INSTRUCTION
+from rag_reliability.methods.m3.prompts import SEED_INSTRUCTION
 
 
 def test_seed_instruction_has_axis_independence_rule():

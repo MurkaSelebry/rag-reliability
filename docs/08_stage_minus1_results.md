@@ -26,7 +26,7 @@ semantic entropy) против внешнего API на синтетическ�
 
 ## 2. Что построено
 
-### Общий слой (`src/common/`)
+### Общий слой (`src/rag_reliability/common/`)
 
 | Модуль | Назначение |
 |---|---|
@@ -37,13 +37,13 @@ semantic entropy) против внешнего API на синтетическ�
 | `eval_local.py` | Байт-в-байт копия замороженного `evaluate.py` платформы: `fit_thresholds`, `evaluate`. |
 | `run_meta.py` | `run.yaml` рядом с predictions: конфиг (с редакцией `api_key` → `***`) + git-хэш + seed. |
 
-### Метод 3 (`src/m3/`)
+### Метод 3 (`src/rag_reliability/methods/m3/`)
 
 - `prompts.py` — `SEED_INSTRUCTION` + шаблон `[Q]/[CTX]/[A]` (копия reference).
 - `predict.py` — CLI (`--mode/--split/--limit`); guard всего файла до первого запроса;
   `JudgeClient.judge` на кейс; пороги с val через `eval_local`; `run.yaml` + `report_{split}.json`.
 
-### Метод 6 (`src/m6/`)
+### Метод 6 (`src/rag_reliability/methods/m6/`)
 
 - `nli.py` — батчевый `NLIScorer` на mDeBERTa-XNLI (ленивый импорт torch).
 - `sample.py` — N сэмплов ответа «бота», поэлементный кэш.
@@ -51,7 +51,7 @@ semantic entropy) против внешнего API на синтетическ�
   двунаправленному entailment), `cos_q_a` на multilingual-e5.
 - `predict.py` — изотоника (p_faith, калибровка на val) + логрег (p_rel, обучение на train).
 
-### Инструменты (`tools/`)
+### Инструменты (`scripts/`)
 
 - `smoke_logprobs.py` — проверка провайдера (top_logprobs на токенах вердикта).
 - `make_pseudo_corpus.py` — генерация псевдо-корпуса из SberQuAD по таксономии docs/07.2.
@@ -229,23 +229,23 @@ export OPENROUTER_API_KEY=...   # или в .env
 pytest tests/ -x -q                       # 44 passed
 
 # 1) провайдер отдаёт top_logprobs на токенах вердикта?
-python -m tools.smoke_logprobs --config configs/config.cloud.yaml -n 3
+python scripts/smoke_logprobs.py --config configs/config.cloud.yaml -n 3
 
 # 2) псевдо-корпус (кэш в artifacts/pseudo_gen; --limit N -> отдельные __smokeN файлы)
-python -m tools.make_pseudo_corpus --config configs/config.cloud.yaml
+python scripts/make_pseudo_corpus.py --config configs/config.cloud.yaml
 
 # 3) Метод 3 zero_shot
-python -m src.m3.predict --config configs/config.cloud.yaml --mode zero_shot --split val
+python scripts/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val
 
 # 4) Метод 6 (20 кейсов)
 for s in train val test; do
-  python -m src.m6.sample   --config configs/config.cloud.yaml --split $s --limit 20
-  python -m src.m6.features --config configs/config.cloud.yaml --split $s --limit 20
+  python scripts/prepare_m6_samples.py   --config configs/config.cloud.yaml --split $s --limit 20
+  python scripts/prepare_m6_features.py --config configs/config.cloud.yaml --split $s --limit 20
 done
-python -m src.m6.predict --config configs/config.cloud.yaml --limit 20
+python scripts/run_m6_selfcheck.py --config configs/config.cloud.yaml --limit 20
 
 # 5) сигналы работоспособности
-python -m tools.check_signals --config configs/config.cloud.yaml --split val \
+python scripts/check_signals.py --config configs/config.cloud.yaml --split val \
     --m3-pred predictions/cloud/m3/zero_shot/val.jsonl \
     --m6-features artifacts/cloud/m6_features/val.jsonl
 ```

@@ -2,7 +2,7 @@
 
 import mlflow
 
-from src.common.tracking import log_run
+from rag_reliability.common.tracking import log_run
 
 
 def test_log_run_local_store(tmp_path):
