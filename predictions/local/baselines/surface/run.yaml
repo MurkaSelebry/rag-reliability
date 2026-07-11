@@ -37,7 +37,7 @@ config:
     out_pred_dir: predictions/m6
     entail_threshold: 0.5
   profile: local
-git_hash: e342bfd9b67391cac2a07c46e1c0f4234ea21752
+git_hash: c310df396dfc33a453b9040c4daa7521fe94b975
 profile: local
 split: test
 method: baseline

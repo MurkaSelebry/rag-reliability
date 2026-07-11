@@ -89,3 +89,14 @@
 - [ ] Вклад в H1: наша строка gepa с тем же backbone, что Метод 1
 - [ ] Эволюция GEPA-промпта (для презентации)
 - [ ] limitations: reflection-LM, прокси-генератор, supervised p_rel в m6
+
+## Этап 2 — results/ на полном датасете организаторов (2026-07-11, песочница без GPU/vLLM)
+- [x] data.zip → data/raw/alfa/data.csv → provisional-сплиты пересобраны на всех 2233 кейсах
+- [x] pytest 100/100 + ruff — зелёные (`results/pytest.log`)
+- [x] Бейзлайны без LLM (majority/surface/surface+e5) — полный прогон val+test (`results/metrics/baselines_summary.json`)
+- [ ] Метод 3 zero_shot/few_shot на полном датасете — **заблокировано**: нет
+      локального vLLM, cloud-прогон на реальных данных запрещён harness'ом
+      даже с подтверждением пользователя (см. `results/README.md` §3.1)
+- [ ] Метод 6 (сэмплы + NLI/эмбеддинг-фичи) на полном датасете — **заблокировано**:
+      нужны и LLM (сэмплирование), и GPU (фичи, CPU >8 мин/кейс); см. `results/README.md` §4
+- [x] `results/README.md` — сводный отчёт, честно фиксирующий что посчитано, а что нет
