@@ -28,3 +28,8 @@ def test_list_methods_prints_all_methods() -> None:
 def test_run_rejects_unknown_method() -> None:
     result = runner.invoke(app, ["run", "--method", "nope", "--data", "data/dummy.jsonl"])
     assert result.exit_code != 0
+
+
+def test_run_rejects_multiple_methods() -> None:
+    result = runner.invoke(app, ["run", "--method", "all", "--data", "data/dummy.jsonl"])
+    assert result.exit_code != 0

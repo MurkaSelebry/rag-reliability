@@ -21,6 +21,11 @@ def test_demo_methods_match_registry() -> None:
     assert tuple(serve_demo.METHODS) == registry.all_method_names()
 
 
+def test_demo_statuses_cover_all_registry_methods() -> None:
+    statuses = serve_demo.method_statuses()
+    assert set(statuses) == set(registry.all_method_names())
+
+
 def test_independent_and_judge_have_status() -> None:
     statuses = serve_demo.method_statuses()
     assert "independent" in statuses

@@ -47,10 +47,12 @@ def run(
     limit: int | None = typer.Option(None, help="Run only the first N samples."),
 ) -> None:
     try:
-        names = registry.resolve_names(method)
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from exc
-    _execute(names, data, output_dir, {"model": model, "limit": limit})
+        registry.get(method)
+    except KeyError as exc:
+        raise typer.BadParameter(
+            f"Unknown method {method!r}; available: {', '.join(registry.all_method_names())}"
+        ) from exc
+    _execute([method], data, output_dir, {"model": model, "limit": limit})
 
 
 @app.command(help="Run several methods through the shared predictions -> metrics contract.")
