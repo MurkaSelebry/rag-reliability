@@ -1,0 +1,46 @@
+@startuml sample-dataflow
+title RAG Reliability Judge — One Sample: RagSample -> Prediction -> metrics
+
+skinparam shadowing false
+skinparam activity {
+  BorderColor #555555
+  BackgroundColor #FBFBFB
+  DiamondBackgroundColor #E3F2FD
+  DiamondBorderColor #555555
+}
+
+start
+:RagSample\n(question, context, answer,\n[gold faithfulness / relevance / marker]);
+
+if (method family?) then (prompt / LoRA / m3 judge)
+  :build prompt\n(direct | marker | judge);
+  :backend.generate\n(mlx | dummy | openai\n[+ LoRA adapter]);
+  :raw model output (JSON-ish text);
+  :parse_prediction\n(conservative, JSON-only,\nfallback -> invalid);
+elseif (feature scoring) then (lettucedetect / m6)
+  :extract token / sample features;
+  :classifier or thresholds\n(logistic reg | contradiction /\nentropy / relevance cutoffs);
+elseif (supervised) then (encoder)
+  :tokenize (RuModernBERT);
+  :sigmoid head + tuned threshold;
+else (rule-based)
+  :lexical coverage +\nnumeric consistency +\nconservative error rules;
+endif
+
+:Prediction\n(faithfulness 0|1, relevance 0|1,\n[marker], invalid_output);
+
+:reliable = faithfulness AND relevance;
+
+:evaluate.py aggregates over the split;
+
+:metrics.json\n(reliable_f1_macro,\nfaithfulness / relevance f1,\ninvalid_output_rate);
+stop
+
+note right
+  All families converge on the same
+  Prediction schema, so the downstream
+  contract (reliable rule + evaluator)
+  is identical regardless of method.
+end note
+
+@enduml

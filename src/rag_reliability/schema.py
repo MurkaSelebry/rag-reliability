@@ -63,6 +63,12 @@ class Prediction(BaseModel):
     marker_pred: str | None = None
     raw_output: str | None = None
     invalid_output: bool = False
+    # Judge-method probabilities (Method 3 logprobs path). Binary *_pred fields
+    # stay the evaluation contract; probabilities are extra evidence and record
+    # how they were obtained ("logprobs", "regex" or "default").
+    faithfulness_prob: float | None = Field(default=None, ge=0, le=1)
+    relevance_prob: float | None = Field(default=None, ge=0, le=1)
+    prob_method: str | None = None
 
     @property
     def reliable_pred(self) -> int:

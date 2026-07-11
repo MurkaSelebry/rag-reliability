@@ -1,0 +1,97 @@
+@startuml architecture
+title RAG Reliability Judge — Component Architecture
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam rectangle {
+  BorderColor #555555
+  BackgroundColor #FBFBFB
+}
+skinparam package {
+  BorderColor #888888
+  BackgroundColor #F2F2F2
+}
+
+' ---- Entry points ------------------------------------------------------
+package "Entry points" {
+  [rag-judge CLI\n(cli.py)\nrun · benchmark · eval\nserve · list-methods] as CLI
+  [Gradio demo\n(serve_demo.py)] as DEMO
+  [run_benchmark.py\n(compat shim)] as BENCH
+}
+
+' ---- Single source of truth -------------------------------------------
+package "Single source of truth" {
+  [Method registry\n(registry.py)\nMethodSpec · METHODS\nbuild_command · demo_runner] as REG
+}
+
+' ---- Method implementations -------------------------------------------
+package "Methods (src/rag_reliability/methods)" {
+  [m3\n(judge · gepa · logprobs)] as M3
+  [m6\n(selfcheck features)] as M6
+  [lettucedetect] as LD
+  [independent\n(rule-based)] as IND
+}
+
+package "Shared core" {
+  [schema · prompts\nparsing · mlx_backend] as CORE
+}
+
+' ---- Per-method runner scripts ----------------------------------------
+package "Runner scripts (scripts/*.py)" {
+  [run_prompt_baseline] as S_PROMPT
+  [infer\n(LoRA adapters)] as S_INFER
+  [run_m3] as S_M3
+  [run_m6_selfcheck] as S_M6
+  [infer_lettucedetect] as S_LD
+  [train_encoder_baseline] as S_ENC
+  [run_independent] as S_IND
+}
+
+' ---- Shared evaluator -------------------------------------------------
+[evaluate.py\npredictions -> metrics] as EVAL
+database "results/\npredictions.jsonl\nmetrics.json\nsummary.json" as OUT
+
+' ---- Wiring -----------------------------------------------------------
+CLI --> REG : resolve names,\nbuild_command
+BENCH --> REG : delegates dispatch
+DEMO --> REG : method list + statuses
+
+CLI ..> BENCH : reuses MethodRun\n+ subprocess plumbing
+
+REG ..> S_PROMPT : argv
+REG ..> S_INFER : argv
+REG ..> S_M3 : argv
+REG ..> S_M6 : argv
+REG ..> S_LD : argv
+REG ..> S_ENC : argv
+REG ..> S_IND : argv
+
+S_M3 --> M3
+S_M6 --> M6
+S_LD --> LD
+S_IND --> IND
+S_PROMPT --> CORE
+S_INFER --> CORE
+M3 --> CORE
+DEMO --> IND : in-process runner
+
+S_PROMPT --> OUT
+S_INFER --> OUT
+S_M3 --> OUT
+S_M6 --> OUT
+S_LD --> OUT
+S_ENC --> OUT
+S_IND --> OUT
+
+CLI --> EVAL
+BENCH --> EVAL
+EVAL --> OUT
+
+note bottom of REG
+  Both CLI and demo read the same 15-method
+  registry — adding a MethodSpec surfaces it
+  everywhere, no per-entry-point edits.
+end note
+
+@enduml

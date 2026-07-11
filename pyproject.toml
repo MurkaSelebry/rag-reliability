@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml>=6.0",
     "tqdm>=4.66",
     "numpy>=1.26",
+    "typer>=0.12,<1",
     "openai>=1.40",        # клиент к vLLM/OpenRouter (OpenAI-совместимый API), m3-m6
     "pandas>=2.0",         # results_index, загрузка корпуса (m3-m6)
     "razdel>=0.5",         # русская сентенизация (Метод 6, m3-m6)
@@ -74,6 +75,9 @@ data = [
     "datasets>=2.20",      # SberQuAD для псевдо-корпуса
     "dvc>=3.50",
 ]
+
+[project.scripts]
+rag-judge = "rag_reliability.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
