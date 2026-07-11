@@ -3,42 +3,64 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rag-reliability-m3m6"
+name = "rag-reliability-judge"
 version = "0.1.0"
-description = "Методы 3 (LLM-as-judge/GEPA) и 6 (SelfCheck+entropy) проекта RAG-reliability"
+description = "LLM-as-judge and consistency methods for assessing reliability of RAG answers (faithfulness + relevance)"
 requires-python = ">=3.11"
-# Ядро — только то, что нужно чистой логике и клиенту LLM; тяжёлые стеки — в extras.
+# Ядро — общее для обоих пакетов (rag_reliability — бенчмарк-харнесс,
+# rag_reliability_m3m6 — пайплайн ветки m3-m6); тяжёлые стеки — в extras.
 dependencies = [
-    "openai>=1.40",        # клиент к vLLM/OpenRouter (OpenAI-совместимый API)
+    "scikit-learn>=1.4",
+    "pydantic>=2.5",
     "pyyaml>=6.0",
-    "numpy>=1.26",
     "tqdm>=4.66",
-    "scikit-learn>=1.4",   # eval_local, пороги, фичи
-    "pandas>=2.0",         # results_index, загрузка корпуса
-    "razdel>=0.5",         # русская сентенизация (Метод 6)
+    "numpy>=1.26",
+    "openai>=1.40",        # клиент к vLLM/OpenRouter (OpenAI-совместимый API), m3-m6
+    "pandas>=2.0",         # results_index, загрузка корпуса (m3-m6)
+    "razdel>=0.5",         # русская сентенизация (Метод 6, m3-m6)
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
+    "mypy>=1.8",
     "pre-commit>=3.6",
-    "mlflow>=2.12",        # нужен тестам tracking (файловый стор, без сервера)
+    "mlflow>=2.12",        # нужен тестам tracking ветки m3-m6 (файловый стор)
+]
+mlx = [
+    "mlx-lm>=0.20",
+    # transformers v5 breaks mlx-lm tokenizer registration
+    # (TOKENIZER_MAPPING.register gets a str config_class)
+    "transformers<5",
+]
+lettucedetect = [
+    "lettucedetect",
+    "torch",
+    "transformers<5",
+    "joblib>=1.3",
+]
+encoder = [
+    "accelerate>=0.26.0",
+    "torch>=2.3",
+    "transformers>=4.44,<5",
+    "datasets>=2.18",
+    "pandas>=2.0",
+]
+m6 = [
+    "torch>=2.3",
+    "transformers>=4.44,<5",
+    "sentence-transformers>=3.0",
+]
+cloud = [
+    "openai>=1.0",
 ]
 gepa = [
     "dspy>=2.6.14",
 ]
-# torch ставится отдельным шагом с CPU-индексом при необходимости
-# (`uv pip install --index-url https://download.pytorch.org/whl/cpu torch`);
-# смешивать индексы в общем резолве uv отказывается (No solution found).
-m6 = [
-    "torch>=2.3",
-    "transformers>=4.44",
-    "sentence-transformers>=3.0",
-]
-encoder = [
-    "torch>=2.3",
-    "transformers>=4.44",
+demo = [
+    "gradio>=4.0,<6",
+    "huggingface-hub>=0.34,<1",
 ]
 viz = [
     "matplotlib>=3.8",
@@ -64,15 +86,15 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
-# reference_src — референс платформы; data/baseline.ipynb — ноутбук организаторов
-extend-exclude = ["reference_src", "data/baseline.ipynb"]
+target-version = "py311"
+# from_organizators и data/baseline.ipynb — код организаторов;
+# reference_src — референс платформы
+extend-exclude = ["from_organizators", "reference_src", "data/baseline.ipynb"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
-# `l` как имя строки (`for l in fh`) — идиома всей кодовой базы, не переименовываем.
+# `l` как имя строки (`for l in fh`) — идиома кодовой базы m3-m6, не переименовываем.
 ignore = ["E741"]
 
-[tool.ruff.lint.per-file-ignores]
-# Текст промптов — семантика, не код: не переносим строки (смена текста = смена
-# промпта и инвалидация кэша судьи).
-"src/rag_reliability_m3m6/methods/m3/prompts.py" = ["E501"]
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

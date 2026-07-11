@@ -27,6 +27,10 @@ venv/
 .ruff_cache/
 .superpowers/
 
+# Экспериментальные выходы бенчмарка (сама директория остаётся)
+results/*
+!results/.gitkeep
+
 # OS
 .DS_Store
 
