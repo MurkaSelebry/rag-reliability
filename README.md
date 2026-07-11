@@ -16,6 +16,23 @@ Implemented method families:
 - **Method 3/6 imports from `m3-m6`**: Method 3 prompt judge and Method 6
   SelfCheck-style feature scoring are integrated through the shared
   predictions/metrics contract.
+- **Independent rule-based evaluator**: heuristic thresholds over
+  faithfulness/relevance signals, no model required.
+
+All methods are registered in one place
+(`src/rag_reliability/methods/registry.py`) and driven through a single CLI,
+`rag-judge`.
+
+## At a glance
+
+`rag-judge` is the single entry point for running, benchmarking, and scoring
+every method against the shared `predictions.jsonl` → `metrics.json`
+contract. Fifteen methods are registered, from a zero-config dummy baseline
+to LoRA-tuned and Method 3/6 judges; `rag-judge list-methods` prints exactly
+what's available and what each one requires. Training and data-prep
+pipelines stay as standalone `scripts/*.py` invocations (see
+[Advanced / pipelines](#advanced--pipelines)) since they produce artifacts
+(adapters, checkpoints, prompts) that methods later consume.
 
 ## Documentation map
 
@@ -47,69 +64,98 @@ make help                       # all shortcuts: dummy, baselines, LoRA, eval
 
 (No make: `uv venv --python 3.12 && uv pip install -e ".[dev]"`, then `pytest`.)
 
-Smoke-test the pipeline without any model:
+This installs the `rag-judge` console script. List every registered method,
+its family, and what it requires:
 
 ```bash
-python scripts/run_prompt_baseline.py \
-  --data data/dummy.jsonl \
-  --output results/dummy_predictions.jsonl \
-  --mode marker --backend dummy --dummy-strategy keyword
-
-python scripts/evaluate.py \
-  --data data/dummy.jsonl \
-  --predictions results/dummy_predictions.jsonl \
-  --output results/dummy_metrics.json
+rag-judge list-methods
 ```
+
+Smoke-test the pipeline without any model (dummy backend, no downloads):
+
+```bash
+rag-judge run --method dummy_marker --data data/dummy.jsonl --output-dir results/run
+```
+
+Run several methods through the shared predictions → metrics contract:
+
+```bash
+rag-judge benchmark --methods dummy_direct,dummy_marker --data data/dummy.jsonl --output-dir results/benchmark_dummy
+```
+
+Use `--methods all` to run every registered method, or a comma list to pick
+specific ones. Each run writes `predictions.jsonl` and `metrics.json` per
+method plus a `summary.json` in `--output-dir`.
 
 Real zero-shot baseline (downloads ~840 MB once):
 
 ```bash
-python scripts/run_prompt_baseline.py \
-  --data data/dummy.jsonl \
-  --output results/qwen_direct_predictions.jsonl \
-  --mode direct --backend mlx
+rag-judge run --method prompt_direct --data data/dummy.jsonl --output-dir results/run
 ```
+
+Score an existing predictions file against gold labels directly:
+
+```bash
+rag-judge eval --data data/dummy.jsonl --predictions results/run/predictions.jsonl --output results/run/metrics.json
+```
+
+Launch the local Gradio demo UI:
+
+```bash
+make install-demo
+rag-judge serve
+```
+
+The demo accepts `question`, `context`, `answer`, optional gold labels, and a
+method selector sourced from the same registry as the CLI. Methods that need
+missing artifacts or dependencies return a clear unavailable status instead
+of crashing; the encoder method can run from a configured local checkpoint
+when one is available. It also supports dataset presets, side-by-side method
+comparison, compact correctness display, raw-output inspection, run history,
+method configuration, and batch benchmark command generation from either a
+path or uploaded JSONL.
 
 LoRA fine-tuning: see [docs/training.md](docs/training.md). LettuceDetect
 feature-classifier training: see [docs/lettucedetect.md](docs/lettucedetect.md).
 
-Unified benchmark interface:
+## Methods
 
-```bash
-python scripts/run_benchmark.py \
-  --data data/dummy.jsonl \
-  --methods dummy_direct,dummy_marker \
-  --output-dir results/benchmark_dummy
-```
+| Method | Family | What it needs | In demo? |
+|---|---|---|---|
+| `dummy_direct` | dummy | — | yes |
+| `dummy_marker` | dummy | — | yes |
+| `prompt_direct` | prompt | MLX model | yes |
+| `prompt_marker` | prompt | MLX model | yes |
+| `lora_direct` | lora | `results/adapters_direct` | yes |
+| `lora_marker` | lora | `results/adapters_marker` | yes |
+| `lettucedetect` | lettucedetect | `results/lettucedetect/classifier.joblib` | yes |
+| `encoder` | encoder | `results/encoder_checkpoints_512_best` | yes |
+| `m3_zero_shot` | m3 | MLX model | yes |
+| `m3_few_shot` | m3 | `configs/few_shot.yaml` | yes |
+| `m3_gepa` | m3 | evolved prompt file | batch-only |
+| `m3_openai` | m3 | OpenAI-compatible endpoint | batch-only |
+| `m3_openai_judge` | m3 | OpenAI-compatible endpoint | batch-only |
+| `m6_selfcheck` | m6 | `results/m6/features.jsonl` | batch-only |
+| `independent` | independent | — | yes |
 
-Supported methods: `dummy_direct`, `dummy_marker`, `prompt_direct`,
-`prompt_marker`, `lora_direct`, `lora_marker`, `lettucedetect`, `encoder`,
-`m3_zero_shot`, `m3_few_shot`, `m3_gepa`, `m3_openai`, `m6_selfcheck`.
-Each method writes `predictions.jsonl`; the shared evaluator then writes
-`metrics.json`.
+This table mirrors `registry.METHODS` in
+[`src/rag_reliability/methods/registry.py`](src/rag_reliability/methods/registry.py);
+run `rag-judge list-methods` for the same information straight from the code.
 
 `m3_zero_shot`, `m3_few_shot`, and `m3_gepa` are Method 3 judge prompt modes
-ported from the `m3-m6` branch.
-`m3_openai` runs the Method 3 zero-shot prompt through an OpenAI-compatible
-chat completions endpoint with a local file cache.
-`m6_selfcheck` consumes a precomputed Method 6 feature JSONL via
-`--m6-features`; sample generation, NLI scoring, and calibration remain explicit
-preparation steps instead of hidden benchmark side effects.
+ported from the `m3-m6` branch. `m3_openai` and `m3_openai_judge` run the
+Method 3 prompt through an OpenAI-compatible chat completions endpoint (the
+latter as a logprob-based judge) with a local file cache. `m6_selfcheck`
+consumes a precomputed Method 6 feature JSONL via `--m6-features`; sample
+generation, NLI scoring, and calibration remain explicit preparation steps
+instead of hidden benchmark side effects.
 
-Manual local demo UI:
+## Advanced / pipelines
 
-```bash
-make install-demo
-make serve-demo
-```
-
-The demo accepts `question`, `context`, `answer`, optional gold labels, and a
-method selector. Methods that need missing artifacts or dependencies return a
-clear unavailable status instead of crashing; the encoder method can run from a
-configured local checkpoint when one is available.
-It also supports dataset presets, side-by-side method comparison, compact
-correctness display, raw-output inspection, run history, method configuration,
-and batch benchmark command generation from either a path or uploaded JSONL.
+Training and data-prep steps produce artifacts (adapters, checkpoints,
+converted datasets, evolved prompts) that the methods above consume — they
+are not part of the `run`/`benchmark`/`eval` contract, so they stay as raw
+script invocations.
 
 Supervised encoder baseline from the organizer notebook:
 
@@ -126,9 +172,15 @@ python scripts/train_encoder_baseline.py \
   --epochs 3 --learning-rate 2e-5 --pos-weight-mode none
 ```
 
+LoRA training (`train_direct_lora.py` / `mlx_lm.lora`): see
+[docs/training.md](docs/training.md).
+
+GEPA prompt evolution (`run_gepa.py`, produces the prompt file consumed by
+`m3_gepa`): see [docs/m3_m6.md](docs/m3_m6.md).
+
 ## Metrics
 
-Reported by `scripts/evaluate.py`:
+Reported by `rag-judge eval` (`scripts/evaluate.py`):
 
 - **`reliable_f1_macro`** — primary metric
 - `faithfulness_f1_macro`, `relevance_f1_macro`
@@ -156,6 +208,10 @@ reliability macro-F1 `0.5879`.
 - ✅ Method 3/6 code from `m3-m6` is being integrated selectively into the
   shared prediction/evaluation contract without replacing the current package
   layout.
+- ✅ All 15 methods are registered in `methods/registry.py` and reachable
+  through the `rag-judge` CLI (`run`, `benchmark`, `eval`, `serve`,
+  `list-methods`); 11 of them are also wired into the Gradio demo (see
+  the Methods table above).
 - ⏳ Next: real Method 1 vs Method 2 fine-tuning comparison and targeted
   hyperparameter tuning around the 512-token encoder setup.
 
@@ -165,7 +221,8 @@ reliability macro-F1 `0.5879`.
 data/dummy.jsonl        36 synthetic Russian banking RAG examples
 configs/                LoRA training configs (direct, marker)
 src/rag_reliability/    schema, prompts, formatting, parsing, metrics,
-                        dataset IO, dummy predictors, mlx backend, methods
+                        dataset IO, dummy predictors, mlx backend, methods,
+                        method registry, rag-judge CLI
 scripts/                CLI entry points — run from repo root
 tests/                  unit tests (65, no MLX required)
 docs/                   architecture / data / training / experiments
