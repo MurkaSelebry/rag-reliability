@@ -1,0 +1,50 @@
+@startmindmap method-taxonomy
+title RAG Reliability Judge — Method Taxonomy (15 methods)
+
+skinparam shadowing false
+<style>
+mindmapDiagram {
+  node {
+    BackgroundColor #FBFBFB
+    LineColor #888888
+  }
+  .demo { BackgroundColor #E8F5E9 }
+  .batch { BackgroundColor #FFF3E0 }
+  .family { BackgroundColor #E3F2FD }
+}
+</style>
+
+* Reliability\njudge
+** <&layers> baselines <<family>>
+*** dummy_direct <<demo>>
+*** dummy_marker <<demo>>
+** <&comment-square> prompt (M1/M2) <<family>>
+*** prompt_direct <<demo>>
+*** prompt_marker <<demo>>
+** <&cog> LoRA fine-tune <<family>>
+*** lora_direct <<demo>>
+*** lora_marker <<demo>>
+** <&magnifying-glass> judge — Method 3 <<family>>
+*** m3_zero_shot <<demo>>
+*** m3_few_shot <<demo>>
+*** m3_gepa <<batch>>
+*** m3_openai <<batch>>
+*** m3_openai_judge <<batch>>
+left side
+** <&pulse> feature scoring <<family>>
+*** lettucedetect <<demo>>
+*** m6_selfcheck <<batch>>
+** <&graph> supervised <<family>>
+*** encoder <<demo>>
+** <&list> rule-based <<family>>
+*** independent <<demo>>
+
+legend right
+  <back:#E8F5E9>   </back> demo — runs in the Gradio UI in-process (11)
+  <back:#FFF3E0>   </back> batch-only — needs an endpoint / precomputed features / evolved prompt (4)
+  ----
+  direct = {faithfulness, relevance}
+  marker = additionally names the error type first
+endlegend
+
+@endmindmap

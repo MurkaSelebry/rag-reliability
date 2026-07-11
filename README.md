@@ -44,6 +44,7 @@ pipelines stay as standalone `scripts/*.py` invocations (see
 | [docs/lettucedetect.md](docs/lettucedetect.md) | LettuceDetect feature extraction + logistic regression |
 | [docs/m3_m6.md](docs/m3_m6.md) | Selective Method 3/6 port from the `m3-m6` branch |
 | [docs/experiments.md](docs/experiments.md) | All results so far, how to reproduce, environment gotchas |
+| [docs/diagrams/](docs/diagrams/README.md) | PlantUML architecture, benchmark pipeline, method taxonomy, and sample data-flow diagrams |
 
 ## Quickstart
 
