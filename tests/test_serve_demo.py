@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from rag_reliability.methods import registry
+
 _SPEC = importlib.util.spec_from_file_location(
     "serve_demo",
     Path(__file__).parents[1] / "scripts" / "serve_demo.py",
@@ -13,6 +15,34 @@ serve_demo = importlib.util.module_from_spec(_SPEC)
 assert _SPEC.loader is not None
 sys.modules["serve_demo"] = serve_demo
 _SPEC.loader.exec_module(serve_demo)
+
+
+def test_demo_methods_match_registry() -> None:
+    assert tuple(serve_demo.METHODS) == registry.all_method_names()
+
+
+def test_demo_statuses_cover_all_registry_methods() -> None:
+    statuses = serve_demo.method_statuses()
+    assert set(statuses) == set(registry.all_method_names())
+
+
+def test_independent_and_judge_have_status() -> None:
+    statuses = serve_demo.method_statuses()
+    assert "independent" in statuses
+    assert statuses["independent"]["available"] is True
+    assert "m3_openai_judge" in statuses
+
+
+def test_independent_runs_in_process() -> None:
+    result = serve_demo.run_manual_method(
+        method="independent",
+        question="Какая ставка?",
+        context="Ставка по вкладу 12%.",
+        answer="Ставка 12%.",
+    )
+
+    assert result["available"] is True
+    assert "prediction" in result
 
 
 def test_build_manual_sample_uses_stable_manual_id() -> None:

@@ -1,0 +1,62 @@
+@startuml benchmark-pipeline
+title RAG Reliability Judge — Benchmark Execution (predictions -> metrics contract)
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam participant {
+  BorderColor #555555
+  BackgroundColor #FBFBFB
+}
+skinparam note {
+  BorderColor #888888
+  BackgroundColor #FFF8E1
+}
+
+actor User
+participant "rag-judge\n(cli.py)" as CLI
+participant "registry.py\n(MethodSpec)" as REG
+participant "method script\n(run_m3 / infer / ...)" as RUN
+database "results/<method>/\npredictions.jsonl" as PRED
+participant "evaluate.py" as EVAL
+database "results/<method>/\nmetrics.json" as MET
+database "results/\nsummary.json" as SUM
+
+User -> CLI : rag-judge benchmark\n--methods m3_zero_shot,independent --data D
+
+CLI -> REG : resolve_names("m3_zero_shot,independent")
+REG --> CLI : ["m3_zero_shot", "independent"]
+
+loop for each method
+  CLI -> REG : get(name).build_command(ctx)
+  REG --> CLI : argv (python scripts/<runner> ...)
+
+  CLI -> RUN : subprocess.run(argv)
+  activate RUN
+  note right of RUN
+    Loads RagSample rows, runs the method
+    (prompt / LoRA / judge / features / rules),
+    parses each output into a Prediction.
+  end note
+  RUN -> PRED : write predictions.jsonl
+  RUN --> CLI : exit 0
+  deactivate RUN
+
+  CLI -> EVAL : subprocess.run(evaluate --data D\n--predictions ... --output ...)
+  activate EVAL
+  EVAL -> PRED : read predictions
+  EVAL -> MET : write metrics.json\n(reliable_f1_macro, faithfulness,\nrelevance, invalid_output_rate)
+  EVAL --> CLI : exit 0
+  deactivate EVAL
+end
+
+CLI -> SUM : write summary.json\n(method -> {predictions, metrics})
+CLI --> User : "Saved benchmark summary for N method(s)"
+
+note over PRED, MET
+  Every method — dummy, prompt, LoRA, m3, m6,
+  lettucedetect, encoder, independent — writes the
+  same predictions.jsonl schema, so one evaluator
+  scores them all identically.
+end note
+
+@enduml

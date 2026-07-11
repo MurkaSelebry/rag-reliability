@@ -12,6 +12,8 @@ import numpy as np
 
 from rag_reliability.dataset import load_jsonl
 from rag_reliability.dummy_model import DummyPredictor
+from rag_reliability.methods import registry
+from rag_reliability.methods.independent.predict import predict_independent
 from rag_reliability.methods.lettucedetect.classifier import predictions_from_outputs
 from rag_reliability.methods.lettucedetect.features import (
     FeatureConfig,
@@ -36,21 +38,7 @@ DEMO_CSS = """
 .method-note { color: #555; font-size: 0.92rem; }
 """
 
-METHODS = (
-    "dummy_direct",
-    "dummy_marker",
-    "prompt_direct",
-    "prompt_marker",
-    "lora_direct",
-    "lora_marker",
-    "lettucedetect",
-    "encoder",
-    "m3_zero_shot",
-    "m3_few_shot",
-    "m3_gepa",
-    "m3_openai",
-    "m6_selfcheck",
-)
+METHODS = registry.all_method_names()
 
 
 def parse_args() -> argparse.Namespace:
@@ -150,11 +138,17 @@ def method_statuses(
             "artifact": None,
             "reason": "batch-only: requires OpenAI-compatible endpoint configuration",
         },
+        "m3_openai_judge": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: requires OpenAI-compatible endpoint configuration",
+        },
         "m6_selfcheck": {
             "available": False,
             "artifact": None,
             "reason": "batch-only: requires precomputed Method 6 feature JSONL",
         },
+        "independent": {"available": True, "artifact": None},
     }
 
 
@@ -405,6 +399,8 @@ def run_manual_method(  # noqa: PLR0913, PLR0912
                 max_tokens=max_tokens,
                 mode="few_shot",
             )
+        elif method == "independent":
+            prediction = predict_independent(sample)
         else:
             return {
                 "available": False,
