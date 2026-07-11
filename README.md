@@ -96,7 +96,7 @@ rag-judge run --method prompt_direct --data data/dummy.jsonl --output-dir result
 Score an existing predictions file against gold labels directly:
 
 ```bash
-rag-judge eval --data data/dummy.jsonl --predictions results/run/predictions.jsonl --output results/run/metrics.json
+rag-judge eval --data data/dummy.jsonl --predictions results/run/prompt_direct/predictions.jsonl --output results/run/prompt_direct/metrics.json
 ```
 
 Launch the local Gradio demo UI:
@@ -224,7 +224,7 @@ src/rag_reliability/    schema, prompts, formatting, parsing, metrics,
                         dataset IO, dummy predictors, mlx backend, methods,
                         method registry, rag-judge CLI
 scripts/                CLI entry points — run from repo root
-tests/                  unit tests (65, no MLX required)
+tests/                  unit tests (133, no MLX required)
 docs/                   architecture / data / training / experiments
 results/                predictions, metrics, adapters (gitignored)
 ```
