@@ -2,7 +2,7 @@
 
 import json
 
-from rag_reliability.common.schemas import Case, Pred, load_cases, save_preds
+from rag_reliability_m3m6.common.schemas import Case, Pred, load_cases, save_preds
 
 
 def test_load_cases_full(tmp_path):

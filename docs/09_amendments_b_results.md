@@ -31,7 +31,7 @@
 давал p_faith ≈ 0.000 — переносил провал relevance на faithfulness. Гипотеза: явное
 правило в промпте это уберёт, не тратя GEPA-бюджет.
 
-**Что сделали:** в `src/rag_reliability/methods/m3/prompts.py` в `SEED_INSTRUCTION` добавлен блок «ВАЖНО: оси
+**Что сделали:** в `src/rag_reliability_m3m6/methods/m3/prompts.py` в `SEED_INSTRUCTION` добавлен блок «ВАЖНО: оси
 независимы… FAITHFULNESS оценивается ТОЛЬКО против [CTX]…» с примером off_topic
 (`FAITHFULNESS: PASS + RELEVANCE: FAIL`). Регресс-тест `tests/test_m3_prompts.py`
 фиксирует наличие правила и его позицию до формата вывода. Кэш судьи инвалидировался
@@ -66,7 +66,7 @@
 
 **Диагноз:** самый трудный тип не мониторился ни в m3-, ни в m6-сигналах.
 
-**Что сделали:** в `scripts/check_signals.py` добавлены:
+**Что сделали:** в `scripts/m3m6/check_signals.py` добавлены:
 - m3-блок: `сигнал faith (clean − incomplete)` с порогом (OK при Δ>0.2, иначе «слабый»);
 - m6-блок: информационная строка `инфо m6 (incomplete − clean)` без вердикта — слепота
   consistency к неполноте ожидаема и является частью H4-нарратива.
@@ -97,7 +97,7 @@ consistency не ловят даром.
 **Диагноз этапа −1:** semantic entropy Δ (halluc − clean) = +0.009 при n=5 — неинформативна.
 Гипотеза: причина — малое число сэмплов; при n=10 сигнал вырастет.
 
-**Что сделали:** в `src/rag_reliability/methods/m6/sample.py` логику «пропустить существующий кэш» заменили на
+**Что сделали:** в `src/rag_reliability_m3m6/methods/m6/sample.py` логику «пропустить существующий кэш» заменили на
 **добор** через `_need_samples(cache_file, target) → (need, existing)` (3 юнит-теста),
 сохранив атомарную запись. Это позволяет дорастить кэш с 5 до 10 сэмплов, не пересэмплируя
 уже сгенерированное. Прогнали добор (по 5 к каждому из 60 кейсов), пересчитали фичи в
@@ -130,7 +130,7 @@ hallucination (4.0 / 1.034).
 
 Два негативных результата напрямую формируют следующий план:
 
-1. **off_topic faith-путаница промптом не лечится** → в `configs/few_shot.yaml` обязателен
+1. **off_topic faith-путаница промптом не лечится** → в `configs/m3m6/few_shot.yaml` обязателен
    пример off_topic с `FAITHFULNESS: PASS, RELEVANCE: FAIL`; это цель few_shot/GEPA, не seed.
 2. **semantic entropy — тупиковый признак** → в Методе 6 сигнал faithfulness строим на
    contradiction; энтропию оставляем как иллюстрацию alignment-collapse (H4), не как рабочую
@@ -141,15 +141,15 @@ hallucination (4.0 / 1.034).
 
 ```bash
 pytest tests/ -x -q                       # 48 passed
-python3 -c "from rag_reliability.methods.m3.prompts import SEED_INSTRUCTION as s; print('оси независимы' in s)"  # True
+python3 -c "from rag_reliability_m3m6.methods.m3.prompts import SEED_INSTRUCTION as s; print('оси независимы' in s)"  # True
 
 # повторный m3 zero_shot + сигналы (кэш судьи пересчитается сам)
-python3 -m rag_reliability.methods.m3.predict --config configs/config.cloud.yaml --mode zero_shot --split val
-python3 -m rag_reliability.analysis.check_signals --config configs/config.cloud.yaml --split val \
+python3 -m rag_reliability_m3m6.methods.m3.predict --config configs/config.cloud.yaml --mode zero_shot --split val
+python3 -m rag_reliability_m3m6.analysis.check_signals --config configs/config.cloud.yaml --split val \
     --m3-pred predictions/cloud/m3/zero_shot/val.jsonl \
     --m6-features artifacts/cloud/m6_features/val.jsonl
 
 # абляция N=10 (опционально; вернуть n_samples: 10 и features_cache: m6_features_n10 в конфиге):
-#   for s in val train test; do python3 -m rag_reliability.methods.m6.sample ... ; python3 -m rag_reliability.methods.m6.features ... ; done
+#   for s in val train test; do python3 -m rag_reliability_m3m6.methods.m6.sample ... ; python3 -m rag_reliability_m3m6.methods.m6.features ... ; done
 #   check_signals на m6_features_n10 → entropy Δ ≈ −0.16 (не растёт)
 ```

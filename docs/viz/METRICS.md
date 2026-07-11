@@ -36,13 +36,13 @@ faith=1, rel=0, а не двойной FAIL. Путаница осей судь�
 `RELEVANCE: PASS|FAIL`; на позиции каждого вердикта берутся log-вероятности токенов
 PASS и FAIL из top-20 и нормируются softmax'ом по паре:
 `p = exp(lp_PASS) / (exp(lp_PASS) + exp(lp_FAIL))`
-(`src/rag_reliability/common/llm_client.py: extract_verdict_probs`). BPE-подтокены склеиваются;
+(`src/rag_reliability_m3m6/common/llm_client.py: extract_verdict_probs`). BPE-подтокены склеиваются;
 точные совпадения приоритетнее префиксов. Интерпретация: p — уверенность модели в
 вердикте, **не калиброванная вероятность** (распределение бимодально, см. §4).
 
 **Метод 6 (consistency):** p_faith — изотоническая регрессия (на val) поверх
 consistency-скора из фич §5; p_rel — логистическая регрессия (на train) по всем фичам
-(`src/rag_reliability/methods/m6/predict.py`). Эти p калиброваны по построению (изотоника монотонно отображает
+(`src/rag_reliability_m3m6/methods/m6/predict.py`). Эти p калиброваны по построению (изотоника монотонно отображает
 скор в частоту позитивов).
 
 ### extract_method (санити извлечения, только m3)
@@ -59,7 +59,7 @@ report.html, секция 11.
 ## 2. Метрики качества (per-run: вариант × сплит)
 
 Файлы `predictions/<method>/<variant>/report_<split>.json`; расчёт —
-`src/rag_reliability/common/eval_local.py` (копия замороженного evaluate.py платформы).
+`src/rag_reliability_m3m6/common/eval_local.py` (копия замороженного evaluate.py платформы).
 
 | Метрика | Что означает |
 |---|---|
@@ -78,7 +78,7 @@ report.html, секция 11.
 На 30-кейсовых сплитах шумит (см. gepa_markers_s0 с gap −0.036 — test лучше val),
 поэтому интерпретируется вместе с размером сплита.
 
-### Сигналы работоспособности (scripts/check_signals.py)
+### Сигналы работоспособности (scripts/m3m6/check_signals.py)
 
 Разности средних p между типами кейсов — грубые «живы ли оси», меряются на val до
 всяких порогов:

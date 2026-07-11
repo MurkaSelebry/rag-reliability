@@ -6,7 +6,7 @@ REQUIRED_FIELDS = {"q", "ctx", "a", "analysis", "faith", "rel"}
 
 
 def _load():
-    return yaml.safe_load(open("configs/few_shot.yaml", encoding="utf-8"))["examples"]
+    return yaml.safe_load(open("configs/m3m6/few_shot.yaml", encoding="utf-8"))["examples"]
 
 
 def test_examples_count_and_fields():

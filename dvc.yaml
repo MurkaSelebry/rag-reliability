@@ -9,9 +9,9 @@
 # Первичная фиксация без перезапуска: `dvc commit -f` (скрипты идемпотентны, кэши свои).
 stages:
   pseudo:
-    cmd: python scripts/make_pseudo_corpus.py --config configs/config.cloud.yaml
+    cmd: python scripts/m3m6/make_pseudo_corpus.py --config configs/config.cloud.yaml
     deps:
-      - src/rag_reliability/data/pseudo_corpus.py
+      - src/rag_reliability_m3m6/data/pseudo_corpus.py
       - configs/config.cloud.yaml
     outs:
       - data/processed/pseudo_dev_train.jsonl
@@ -20,12 +20,12 @@ stages:
 
   m3_zero_shot:
     cmd: >-
-      python scripts/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val &&
-      python scripts/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split test
+      python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val &&
+      python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split test
     deps:
-      - src/rag_reliability/methods/m3/predict.py
-      - src/rag_reliability/methods/m3/prompts.py
-      - src/rag_reliability/common
+      - src/rag_reliability_m3m6/methods/m3/predict.py
+      - src/rag_reliability_m3m6/methods/m3/prompts.py
+      - src/rag_reliability_m3m6/common
       - configs/config.cloud.yaml
       - data/processed/pseudo_dev_val.jsonl
       - data/processed/pseudo_dev_test.jsonl
@@ -35,14 +35,14 @@ stages:
 
   m3_few_shot:
     cmd: >-
-      python scripts/run_m3.py --config configs/config.cloud.yaml --mode few_shot --split val &&
-      python scripts/run_m3.py --config configs/config.cloud.yaml --mode few_shot --split test
+      python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode few_shot --split val &&
+      python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode few_shot --split test
     deps:
-      - src/rag_reliability/methods/m3/predict.py
-      - src/rag_reliability/methods/m3/prompts.py
-      - src/rag_reliability/common
+      - src/rag_reliability_m3m6/methods/m3/predict.py
+      - src/rag_reliability_m3m6/methods/m3/prompts.py
+      - src/rag_reliability_m3m6/common
       - configs/config.cloud.yaml
-      - configs/few_shot.yaml
+      - configs/m3m6/few_shot.yaml
       - data/processed/pseudo_dev_val.jsonl
       - data/processed/pseudo_dev_test.jsonl
     outs:
@@ -51,12 +51,12 @@ stages:
 
   m6:
     cmd: >-
-      python scripts/prepare_m6_samples.py --config configs/config.cloud.yaml --split val &&
-      python scripts/prepare_m6_features.py --config configs/config.cloud.yaml --split val
+      python scripts/m3m6/prepare_m6_samples.py --config configs/config.cloud.yaml --split val &&
+      python scripts/m3m6/prepare_m6_features.py --config configs/config.cloud.yaml --split val
     deps:
-      - src/rag_reliability/methods/m6/sample.py
-      - src/rag_reliability/methods/m6/features.py
-      - src/rag_reliability/methods/m6/nli.py
+      - src/rag_reliability_m3m6/methods/m6/sample.py
+      - src/rag_reliability_m3m6/methods/m6/features.py
+      - src/rag_reliability_m3m6/methods/m6/nli.py
       - configs/config.cloud.yaml
       - data/processed/pseudo_dev_val.jsonl
     outs:
@@ -64,10 +64,10 @@ stages:
           cache: false
 
   report:
-    cmd: python scripts/make_report.py --root . --out artifacts/report/index.html
+    cmd: python scripts/m3m6/make_report.py --root . --out artifacts/report/index.html
     deps:
-      - src/rag_reliability/analysis/report.py
-      - src/rag_reliability/common/results_index.py
+      - src/rag_reliability_m3m6/analysis/report.py
+      - src/rag_reliability_m3m6/common/results_index.py
       - predictions/cloud
       - artifacts/cloud/m6_features/val.jsonl
     outs:

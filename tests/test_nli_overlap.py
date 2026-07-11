@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import torch
 
-from rag_reliability.methods.m6.nli import NLIScorer, aggregate_windows, split_tokens
+from rag_reliability_m3m6.methods.m6.nli import NLIScorer, aggregate_windows, split_tokens
 
 # --------------------------------------------------------------------------
 # Чистые функции

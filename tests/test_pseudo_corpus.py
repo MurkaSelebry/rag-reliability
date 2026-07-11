@@ -3,7 +3,7 @@
 import random
 from collections import Counter
 
-from rag_reliability.data.pseudo_corpus import LABELS, build_context, plan_kinds, split_ids
+from rag_reliability_m3m6.data.pseudo_corpus import LABELS, build_context, plan_kinds, split_ids
 
 
 def test_plan_kinds_proportion_2111():

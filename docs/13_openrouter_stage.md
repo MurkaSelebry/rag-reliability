@@ -70,7 +70,7 @@ supervised-веток (RuModernBERT кураторов: f1-macro 0.62 на их 
   агрегация max) — длинные реальные чанки больше не теряют сигнал при усечении.
 - **Фичи на CPU нереальны**: замер — >8 мин/кейс (446 кейсов ≈ 60+ часов; длинные
   сэмплы × NLI-пары × окна). Помечено **«до GPU»**: на GPU mDeBERTa считает это
-  минутами; пайплайн готов (`python scripts/prepare_m6_features.py --config configs/config.alfa_cloud.yaml --split val`).
+  минутами; пайплайн готов (`python scripts/m3m6/prepare_m6_features.py --config configs/config.alfa_cloud.yaml --split val`).
 - train-сэмплы (для p_rel-логрега) не закупались до решения по объёму (полные
   1787×10 или подвыборка 800 — план допускает).
 
@@ -97,4 +97,4 @@ supervised-веток (RuModernBERT кураторов: f1-macro 0.62 на их 
   не ловит (mixup/conditions — никто).
 - Эмпирика «judge < surface-логрег на реальном корпусе» — вход для H1-дискуссии.
 - SEED_INSTRUCTION передаётся ветке Метода 1 без изменений (правило осей B1
-  сохранено; few-shot примеры — configs/few_shot.yaml).
+  сохранено; few-shot примеры — configs/m3m6/few_shot.yaml).

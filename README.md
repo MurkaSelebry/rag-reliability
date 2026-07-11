@@ -8,16 +8,16 @@ Responses in RAG Systems** @SMILES × Alfa Bank. По тройке `QUESTION`, `
 
 Реализованные семейства методов:
 
-- **Метод 3 — LLM-as-judge** (`scripts/run_m3.py`): вердикты PASS/FAIL из
+- **Метод 3 — LLM-as-judge** (`scripts/m3m6/run_m3.py`): вердикты PASS/FAIL из
   logprobs токенов (softmax по паре на позиции вердикта), режимы
   `zero_shot` / `few_shot` / `gepa`; промпт-оптимизация GEPA/DSPy
-  (`scripts/run_gepa.py`, гипотеза H5).
-- **Метод 6 — SelfCheckGPT + semantic entropy** (`scripts/prepare_m6_samples.py`
-  → `scripts/prepare_m6_features.py` → `scripts/run_m6_selfcheck.py`):
+  (`scripts/m3m6/run_gepa.py`, гипотеза H5).
+- **Метод 6 — SelfCheckGPT + semantic entropy** (`scripts/m3m6/prepare_m6_samples.py`
+  → `scripts/m3m6/prepare_m6_features.py` → `scripts/m3m6/run_m6_selfcheck.py`):
   unsupervised consistency-сигнал по N сэмплам бота (гипотеза H4).
 - **Бейзлайны**: surface-эвристики ±e5-эмбеддинги
-  (`scripts/run_surface_baseline.py`), supervised-энкодер кураторов
-  (`scripts/train_encoder_baseline.py`).
+  (`scripts/m3m6/run_surface_baseline.py`), supervised-энкодер кураторов
+  (`scripts/m3m6/train_encoder_baseline.py`).
 
 ## Карта документации
 
@@ -65,7 +65,7 @@ llm:
 Smoke-тест провайдера (приходят ли top_logprobs на токенах вердикта):
 
 ```bash
-python scripts/smoke_logprobs.py --config configs/config.cloud.yaml -n 3
+python scripts/m3m6/smoke_logprobs.py --config configs/config.cloud.yaml -n 3
 ```
 
 ## Запуск методов
@@ -75,27 +75,27 @@ python scripts/smoke_logprobs.py --config configs/config.cloud.yaml -n 3
 
 ```bash
 # псевдо-корпус (SberQuAD, 300 кейсов) для cloud-отладки
-python scripts/make_pseudo_corpus.py --config configs/config.cloud.yaml
+python scripts/m3m6/make_pseudo_corpus.py --config configs/config.cloud.yaml
 
 # Метод 3 — судья, zero_shot
-python scripts/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val
+python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val
 
 # Метод 6 — sample -> features -> predict
 for s in train val test; do
-  python scripts/prepare_m6_samples.py  --config configs/config.cloud.yaml --split $s --limit 20
-  python scripts/prepare_m6_features.py --config configs/config.cloud.yaml --split $s --limit 20
+  python scripts/m3m6/prepare_m6_samples.py  --config configs/config.cloud.yaml --split $s --limit 20
+  python scripts/m3m6/prepare_m6_features.py --config configs/config.cloud.yaml --split $s --limit 20
 done
-python scripts/run_m6_selfcheck.py --config configs/config.cloud.yaml --limit 20
+python scripts/m3m6/run_m6_selfcheck.py --config configs/config.cloud.yaml --limit 20
 
 # оценка predictions (пороги: --fit только на val!)
-python scripts/evaluate.py --cases data/processed/pseudo_dev_val.jsonl \
+python scripts/m3m6/evaluate.py --cases data/processed/pseudo_dev_val.jsonl \
     --preds predictions/cloud/m3/zero_shot/val.jsonl --fit
 
 # сигналы работоспособности и отчёты
-python scripts/check_signals.py --config configs/config.cloud.yaml --split val \
+python scripts/m3m6/check_signals.py --config configs/config.cloud.yaml --split val \
     --m3-pred predictions/cloud/m3/zero_shot/val.jsonl \
     --m6-features artifacts/cloud/m6_features/val.jsonl
-python scripts/make_report.py --root . --out artifacts/report/index.html
+python scripts/m3m6/make_report.py --root . --out artifacts/report/index.html
 make explorer           # интерактивный разбор кейсов (streamlit)
 ```
 
@@ -105,8 +105,8 @@ seed) — формат зафиксирован контрактом платф�
 
 ## Метрики
 
-Считает `rag_reliability.common.eval_local` (зеркало замороженного
-`evaluate.py` платформы; см. `scripts/evaluate.py`):
+Считает `rag_reliability_m3m6.common.eval_local` (зеркало замороженного
+`evaluate.py` платформы; см. `scripts/m3m6/evaluate.py`):
 
 - **`f1_macro_reliable`** — основная метрика (joint faith ∧ rel)
 - `f1_macro_faith`, `f1_macro_rel`
@@ -116,7 +116,7 @@ seed) — формат зафиксирован контрактом платф�
 
 - **Local models only** для данных: банковские тройки — только локальный vLLM;
   облако допускается лишь для публичных датасетов и `pseudo_*` (guard в
-  `rag_reliability.common.guard` проверяет каждый запрос).
+  `rag_reliability_m3m6.common.guard` проверяет каждый запрос).
 - **Сплиты неприкосновенны**, dev-test — только финальный замер, не для решений.
 - **Вероятности из logprobs** (softmax PASS/FAIL), fallback
   logprobs → regex → 0.5/0.5; кейс не теряется никогда.
@@ -144,7 +144,7 @@ seed) — формат зафиксирован контрактом платф�
 ## Структура проекта
 
 ```
-src/rag_reliability/     пакет с логикой:
+src/rag_reliability_m3m6/     пакет с логикой:
   common/                config (.env + ${VAR}), schemas (Case/Pred), guard (утечка),
                          llm_client/async_llm, eval_local, run_meta, results_index, tracking
   data/                  alfa_loader, make_splits, pseudo_corpus

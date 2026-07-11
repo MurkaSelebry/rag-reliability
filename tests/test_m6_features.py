@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from rag_reliability.methods.m6.features import (
+from rag_reliability_m3m6.methods.m6.features import (
     entropy_features,
     selfcheck_scores,
     semantic_clusters,

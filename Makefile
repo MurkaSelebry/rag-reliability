@@ -49,49 +49,49 @@ lint: ## Ruff lint
 check: test lint ## Тесты + линт
 
 smoke: ## Smoke-прогон Метода 3 на 10 кейсах (нужен доступ к LLM из CONFIG)
-	$(PY) scripts/run_m3.py --config $(CONFIG) --mode $(MODE) --split $(SPLIT) --limit 10
+	$(PY) scripts/m3m6/run_m3.py --config $(CONFIG) --mode $(MODE) --split $(SPLIT) --limit 10
 
 m3: ## Метод 3: инференс судьи (CONFIG/MODE/SPLIT/LIMIT)
-	$(PY) scripts/run_m3.py --config $(CONFIG) --mode $(MODE) --split $(SPLIT) $(LIMIT_FLAG)
+	$(PY) scripts/m3m6/run_m3.py --config $(CONFIG) --mode $(MODE) --split $(SPLIT) $(LIMIT_FLAG)
 
 gepa: ## Метод 3: GEPA-оптимизация (VARIANT/SEED; дорого — см. стоп-правила docs/10)
-	$(PY) scripts/run_gepa.py --config $(CONFIG) --variant $(VARIANT) --seed $(SEED)
+	$(PY) scripts/m3m6/run_gepa.py --config $(CONFIG) --variant $(VARIANT) --seed $(SEED)
 
 gepa-report: ## Markdown-отчёт эволюции GEPA из stats-json (VARIANT/SEED)
-	$(PY) scripts/gepa_report.py --variant $(VARIANT) --seed $(SEED)
+	$(PY) scripts/m3m6/gepa_report.py --variant $(VARIANT) --seed $(SEED)
 
 m6-samples: ## Метод 6, этап 1: сэмплы бота (поэлементный кэш)
-	$(PY) scripts/prepare_m6_samples.py --config $(CONFIG) --split $(SPLIT) $(LIMIT_FLAG)
+	$(PY) scripts/m3m6/prepare_m6_samples.py --config $(CONFIG) --split $(SPLIT) $(LIMIT_FLAG)
 
 m6-features: ## Метод 6, этап 2: фичи selfcheck/entropy/cos
-	$(PY) scripts/prepare_m6_features.py --config $(CONFIG) --split $(SPLIT) $(LIMIT_FLAG)
+	$(PY) scripts/m3m6/prepare_m6_features.py --config $(CONFIG) --split $(SPLIT) $(LIMIT_FLAG)
 
 m6-predict: ## Метод 6, этап 3: калибровка на val -> predictions
-	$(PY) scripts/run_m6_selfcheck.py --config $(CONFIG) $(LIMIT_FLAG)
+	$(PY) scripts/m3m6/run_m6_selfcheck.py --config $(CONFIG) $(LIMIT_FLAG)
 
 m6: m6-samples m6-features m6-predict ## Метод 6: полный конвейер на SPLIT
 
 baseline-surface: ## Бейзлайн surface(+e5)
-	$(PY) scripts/run_surface_baseline.py --config $(CONFIG) $(LIMIT_FLAG)
+	$(PY) scripts/m3m6/run_surface_baseline.py --config $(CONFIG) $(LIMIT_FLAG)
 
 baseline-encoder: ## Бейзлайн: supervised-энкодер кураторов
-	$(PY) scripts/train_encoder_baseline.py --config $(CONFIG)
+	$(PY) scripts/m3m6/train_encoder_baseline.py --config $(CONFIG)
 
 pseudo-corpus: ## Синтетический псевдо-корпус для cloud-отладки
-	$(PY) scripts/make_pseudo_corpus.py --config $(CONFIG) $(LIMIT_FLAG)
+	$(PY) scripts/m3m6/make_pseudo_corpus.py --config $(CONFIG) $(LIMIT_FLAG)
 
 splits: ## Групповые сплиты из корпуса (данные платформы не трогает)
-	$(PY) scripts/make_splits.py --config $(CONFIG)
+	$(PY) scripts/m3m6/make_splits.py --config $(CONFIG)
 
 figs: ## Фигуры отладки по M3_PRED (matplotlib, см. install-viz)
-	$(PY) scripts/make_figs.py --config $(CONFIG) --split $(SPLIT) --m3-pred $(M3_PRED)
+	$(PY) scripts/m3m6/make_figs.py --config $(CONFIG) --split $(SPLIT) --m3-pred $(M3_PRED)
 
 report: ## Единый offline HTML-отчёт по всем прогонам
-	$(PY) scripts/make_report.py --root . --out artifacts/report/index.html
+	$(PY) scripts/m3m6/make_report.py --root . --out artifacts/report/index.html
 
 explorer: ## Интерактивный разбор кейсов (streamlit, см. install-viz)
-	.venv/bin/streamlit run scripts/explorer.py
+	.venv/bin/streamlit run scripts/m3m6/explorer.py
 
 clean: ## Кэши инструментов и сборки (artifacts/ и predictions/ не трогает)
 	rm -rf .pytest_cache .ruff_cache .mypy_cache \
-		src/*.egg-info src/rag_reliability/__pycache__ tests/__pycache__
+		src/*.egg-info src/rag_reliability_m3m6/__pycache__ tests/__pycache__

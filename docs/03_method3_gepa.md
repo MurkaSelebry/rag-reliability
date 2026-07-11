@@ -79,7 +79,7 @@ user:
    (пороги с val). Это первая строка и санити всей ветки.
 3. **Ступень few_shot.** Отобрать 6–8 кейсов из dev_train: покрыть основные
    маркеры + 2 PASS/PASS-кейса; каждому написать короткий «Анализ: ...» вручную.
-   Примеры живут в `configs/few_shot.yaml`, не в коде.
+   Примеры живут в `configs/m3m6/few_shot.yaml`, не в коде.
 4. **GEPA.** DSPy-программа (signature с Literal["PASS","FAIL"] выходами,
    docstring = SEED_INSTRUCTION), метрика с feedback, `dspy.GEPA(metric=...,
    auto="light"→"medium", reflection_lm=..., track_stats=True, seed=...)`,

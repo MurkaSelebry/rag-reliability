@@ -2,7 +2,7 @@
 
 import json
 
-from rag_reliability.common.results_index import build_index
+from rag_reliability_m3m6.common.results_index import build_index
 
 
 def _mk_variant(root, method, variant, split, preds, report=None, run=None):

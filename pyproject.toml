@@ -75,4 +75,4 @@ ignore = ["E741"]
 [tool.ruff.lint.per-file-ignores]
 # Текст промптов — семантика, не код: не переносим строки (смена текста = смена
 # промпта и инвалидация кэша судьи).
-"src/rag_reliability/methods/m3/prompts.py" = ["E501"]
+"src/rag_reliability_m3m6/methods/m3/prompts.py" = ["E501"]

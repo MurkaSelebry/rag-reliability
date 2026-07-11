@@ -38,17 +38,17 @@ make help               # все цели: методы, бейзлайны, о�
 make check              # = pytest && ruff check .
 
 # Метод 3
-python scripts/run_m3.py --mode zero_shot --split val
-python scripts/run_gepa.py --variant markers --seed 0   # оптимизация промпта
-python scripts/run_m3.py --mode gepa --split test
+python scripts/m3m6/run_m3.py --mode zero_shot --split val
+python scripts/m3m6/run_gepa.py --variant markers --seed 0   # оптимизация промпта
+python scripts/m3m6/run_m3.py --mode gepa --split test
 
 # Метод 6
-python scripts/prepare_m6_samples.py --split val
-python scripts/prepare_m6_features.py --split val
-python scripts/run_m6_selfcheck.py
+python scripts/m3m6/prepare_m6_samples.py --split val
+python scripts/m3m6/prepare_m6_features.py --split val
+python scripts/m3m6/run_m6_selfcheck.py
 ```
 
-Логика живёт в пакете `src/rag_reliability/` (`common/`, `data/`, `baselines/`, `analysis/`, `methods/m3`, `methods/m6`); `scripts/` — тонкие CLI-обёртки над `main()` модулей. Новые CLI делать по той же схеме.
+Логика живёт в пакете `src/rag_reliability_m3m6/` (`common/`, `data/`, `baselines/`, `analysis/`, `methods/m3`, `methods/m6`); `scripts/` — тонкие CLI-обёртки над `main()` модулей. Новые CLI делать по той же схеме.
 
 ## Стиль кода
 
@@ -74,7 +74,7 @@ python scripts/run_m6_selfcheck.py
 ## Чего НЕ делать
 
 - Не оптимизировать промпты/гиперпараметры по dev-test.
-- Не менять `src/rag_reliability/common/eval_local.py` после его создания без явного запроса — он повторяет замороженный evaluate.py платформы.
+- Не менять `src/rag_reliability_m3m6/common/eval_local.py` после его создания без явного запроса — он повторяет замороженный evaluate.py платформы.
 - Не добавлять зависимости без необходимости; список — `pyproject.toml` (ядро + extras: dev/gepa/m6/encoder/viz/tracking/data). Тяжёлое — только в extras.
 - Не запускать полные прогоны на всём датасете без предварительного smoke-теста на 5–10 кейсах (флаг `--limit N` обязателен во всех CLI).
 - Не коммитить содержимое `artifacts/` и `data/` (в .gitignore).

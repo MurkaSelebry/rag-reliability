@@ -16,12 +16,12 @@
 | Файл | Что это |
 |---|---|
 | **`dashboard.html`** | точка входа: KPI, лидерборд, встроенный отчёт, абляция, все галереи (открыть в браузере, сеть не нужна) |
-| `report.html` | интерактивный plotly-отчёт, 11 секций (генерируется `python scripts/make_report.py`) |
-| `figs/*.png` | статичные фигуры (`python scripts/make_figs.py`) + скриншоты Streamlit-эксплорера |
-| `gepa/*.md` | эволюция GEPA-промптов по 4 прогонам (`python scripts/gepa_report.py`) |
-| `m6_entropy_ablation_val.json` | сырые числа абляции энтропии (`python scripts/entropy_ablation.py`) |
+| `report.html` | интерактивный plotly-отчёт, 11 секций (генерируется `python scripts/m3m6/make_report.py`) |
+| `figs/*.png` | статичные фигуры (`python scripts/m3m6/make_figs.py`) + скриншоты Streamlit-эксплорера |
+| `gepa/*.md` | эволюция GEPA-промптов по 4 прогонам (`python scripts/m3m6/gepa_report.py`) |
+| `m6_entropy_ablation_val.json` | сырые числа абляции энтропии (`python scripts/m3m6/entropy_ablation.py`) |
 
-Живой интерактивный разбор кейсов: `streamlit run scripts/explorer.py` из корня репо.
+Живой интерактивный разбор кейсов: `streamlit run scripts/m3m6/explorer.py` из корня репо.
 
 ---
 
@@ -140,10 +140,10 @@ judge-метода (H4). Размер точки = n_clusters.
 ## Как перегенерировать
 
 ```bash
-python scripts/make_figs.py   --config configs/config.cloud.yaml --split val \
+python scripts/m3m6/make_figs.py   --config configs/config.cloud.yaml --split val \
     --m3-pred predictions/cloud/m3/few_shot/val.jsonl --m6-features artifacts/cloud/m6_features/val.jsonl
-python scripts/make_report.py --root . --out artifacts/report/index.html
-python scripts/entropy_ablation.py --config configs/config.cloud.yaml --split val
-python scripts/gepa_report.py --variant markers --seed 0   # × variant/seed
+python scripts/m3m6/make_report.py --root . --out artifacts/report/index.html
+python scripts/m3m6/entropy_ablation.py --config configs/config.cloud.yaml --split val
+python scripts/m3m6/gepa_report.py --variant markers --seed 0   # × variant/seed
 ```
 (и скопировать свежие файлы сюда; dashboard.html — ручной снапшот этапа −0.25).

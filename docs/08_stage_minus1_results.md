@@ -26,7 +26,7 @@ semantic entropy) против внешнего API на синтетическ�
 
 ## 2. Что построено
 
-### Общий слой (`src/rag_reliability/common/`)
+### Общий слой (`src/rag_reliability_m3m6/common/`)
 
 | Модуль | Назначение |
 |---|---|
@@ -37,13 +37,13 @@ semantic entropy) против внешнего API на синтетическ�
 | `eval_local.py` | Байт-в-байт копия замороженного `evaluate.py` платформы: `fit_thresholds`, `evaluate`. |
 | `run_meta.py` | `run.yaml` рядом с predictions: конфиг (с редакцией `api_key` → `***`) + git-хэш + seed. |
 
-### Метод 3 (`src/rag_reliability/methods/m3/`)
+### Метод 3 (`src/rag_reliability_m3m6/methods/m3/`)
 
 - `prompts.py` — `SEED_INSTRUCTION` + шаблон `[Q]/[CTX]/[A]` (копия reference).
 - `predict.py` — CLI (`--mode/--split/--limit`); guard всего файла до первого запроса;
   `JudgeClient.judge` на кейс; пороги с val через `eval_local`; `run.yaml` + `report_{split}.json`.
 
-### Метод 6 (`src/rag_reliability/methods/m6/`)
+### Метод 6 (`src/rag_reliability_m3m6/methods/m6/`)
 
 - `nli.py` — батчевый `NLIScorer` на mDeBERTa-XNLI (ленивый импорт torch).
 - `sample.py` — N сэмплов ответа «бота», поэлементный кэш.
@@ -229,23 +229,23 @@ export OPENROUTER_API_KEY=...   # или в .env
 pytest tests/ -x -q                       # 44 passed
 
 # 1) провайдер отдаёт top_logprobs на токенах вердикта?
-python scripts/smoke_logprobs.py --config configs/config.cloud.yaml -n 3
+python scripts/m3m6/smoke_logprobs.py --config configs/config.cloud.yaml -n 3
 
 # 2) псевдо-корпус (кэш в artifacts/pseudo_gen; --limit N -> отдельные __smokeN файлы)
-python scripts/make_pseudo_corpus.py --config configs/config.cloud.yaml
+python scripts/m3m6/make_pseudo_corpus.py --config configs/config.cloud.yaml
 
 # 3) Метод 3 zero_shot
-python scripts/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val
+python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val
 
 # 4) Метод 6 (20 кейсов)
 for s in train val test; do
-  python scripts/prepare_m6_samples.py   --config configs/config.cloud.yaml --split $s --limit 20
-  python scripts/prepare_m6_features.py --config configs/config.cloud.yaml --split $s --limit 20
+  python scripts/m3m6/prepare_m6_samples.py   --config configs/config.cloud.yaml --split $s --limit 20
+  python scripts/m3m6/prepare_m6_features.py --config configs/config.cloud.yaml --split $s --limit 20
 done
-python scripts/run_m6_selfcheck.py --config configs/config.cloud.yaml --limit 20
+python scripts/m3m6/run_m6_selfcheck.py --config configs/config.cloud.yaml --limit 20
 
 # 5) сигналы работоспособности
-python scripts/check_signals.py --config configs/config.cloud.yaml --split val \
+python scripts/m3m6/check_signals.py --config configs/config.cloud.yaml --split val \
     --m3-pred predictions/cloud/m3/zero_shot/val.jsonl \
     --m6-features artifacts/cloud/m6_features/val.jsonl
 ```
@@ -257,7 +257,7 @@ python scripts/check_signals.py --config configs/config.cloud.yaml --split val \
 
 ## 9. Что дальше (вне этапа −1)
 
-- Метод 3: few_shot (`configs/few_shot.yaml`), GEPA-оптимизация (auto=light, train=50),
+- Метод 3: few_shot (`configs/m3m6/few_shot.yaml`), GEPA-оптимизация (auto=light, train=50),
   H5-прогоны gepa_markers vs gepa_plain — отдельный план.
 - Метод 6: абляции N∈{3,5,10} и T из того же кэша, резка длинных premise с перекрытием.
 - Переход на local vLLM + реальный корпус кураторов → боевые числа в сводную таблицу.

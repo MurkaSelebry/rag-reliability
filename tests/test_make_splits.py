@@ -1,7 +1,7 @@
 """Сплиты: group-aware по нормализованному запросу, стратификация, curator-режим."""
 
-from rag_reliability.common.schemas import Case
-from rag_reliability.data.make_splits import group_key, make_splits
+from rag_reliability_m3m6.common.schemas import Case
+from rag_reliability_m3m6.data.make_splits import group_key, make_splits
 
 
 def _c(i, q, faith=1, rel=1):

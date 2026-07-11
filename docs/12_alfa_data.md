@@ -4,13 +4,13 @@
 (2245 строк — часть будущих ~5k). **Периметр:** данные объявлены владельцем
 открытыми; внешние вызовы разрешены явным opt-in'ом `guard.allow_real_data`
 (см. `configs/config.alfa_cloud.yaml`); дефолт guard'а блокирует.
-Все числа этого дока — из `artifacts/alfa_eda.json` (`python scripts/eda_alfa.py`).
+Все числа этого дока — из `artifacts/alfa_eda.json` (`python scripts/m3m6/eda_alfa.py`).
 
 ## 1. Схема и адаптация
 
 CSV кураторов: `full_dialog` (реплики «Ассистент:/Клиент:/Оператор:»), `answer`,
 `chunk_1..8`, `binary_relevancy`/`binary_faithfulness`, `markers` (repr-строка списка).
-Адаптер `src/rag_reliability/data/alfa_loader.py` → канонический `Case`:
+Адаптер `src/rag_reliability_m3m6/data/alfa_loader.py` → канонический `Case`:
 - `id = alfa_ + sha1(dialog+answer)[:12]` — детерминирован от содержимого
   (переживёт доливку до 5k и перестановку строк);
 - `query` = последняя реплика «Клиент:» (у кураторов есть колонка `full_query`,
@@ -82,7 +82,7 @@ reveals_ai_identity (5), answer_for_operator (4) — похоже на «мин�
 о величине сигналов на реальный корпус не переносятся** (подтверждено этапом 1:
 Δp_faith судьи +0.088 против +0.53 на синтетике).
 
-## 3. Provisional-сплиты (`src/rag_reliability/data/make_splits.py`)
+## 3. Provisional-сплиты (`src/rag_reliability_m3m6/data/make_splits.py`)
 
 - **group** (дефолт): дедуп 12 точных дублей → группировка по нормализованному
   последнему запросу → жадная детерминированная раскладка 80/10/10:

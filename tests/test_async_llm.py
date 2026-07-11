@@ -4,9 +4,9 @@ import asyncio
 
 import pytest
 
-from rag_reliability.common.async_llm import AsyncJudgeClient
-from rag_reliability.common.guard import DataLeakError
-from rag_reliability.common.schemas import Case
+from rag_reliability_m3m6.common.async_llm import AsyncJudgeClient
+from rag_reliability_m3m6.common.guard import DataLeakError
+from rag_reliability_m3m6.common.schemas import Case
 
 CFG = {
     "profile": "cloud",

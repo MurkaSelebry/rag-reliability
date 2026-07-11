@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from rag_reliability.analysis.report import confusion_counts, gepa_evolution_frame, variant_summary
+from rag_reliability_m3m6.analysis.report import confusion_counts, gepa_evolution_frame, variant_summary
 
 
 def test_variant_summary_orders_and_gaps():

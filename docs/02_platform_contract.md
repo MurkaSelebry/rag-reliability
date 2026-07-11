@@ -20,7 +20,7 @@
 - Рядом с predictions — `run.yaml`: полный конфиг прогона, git-хэш, seed,
   дата, стоимость (медиана мс/кейс, число LLM-вызовов на кейс).
 
-## Правила оценки (повторены в src/rag_reliability/common/eval_local.py)
+## Правила оценки (повторены в src/rag_reliability_m3m6/common/eval_local.py)
 
 1. Пороги `t_faith`, `t_rel` подбираются сеткой (шаг 0.01) ТОЛЬКО на dev_val,
    максимизируя f1-macro(reliable), где предсказание

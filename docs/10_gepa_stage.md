@@ -42,18 +42,18 @@ clean/hallucination/incomplete_answer/off_topic_answer, сплит 240/30/30), �
 
 | Файл | Что делает | Тесты |
 |---|---|---|
-| `configs/few_shot.yaml` | 7 few-shot-примеров с ручным «Анализом», якоря обеих осей | `tests/test_few_shot_config.py` (5) |
-| `scripts/make_figs.py` | боксплоты p по kind, reliability diagram, f1(t), scatter m6 | `tests/test_figs_logic.py` (2) |
-| `src/rag_reliability/methods/m3/run_gepa.py` | DSPy/GEPA-оптимизация инструкции судьи; метрика ±маркеры; глосс из yaml | `tests/test_gepa_metric.py` (5) |
-| `src/rag_reliability/methods/m3/gepa_report.py` | markdown-отчёт эволюции промпта из track_stats | I/O-глю, без юнит-теста |
-| `scripts/entropy_ablation.py` | абляция entropy по (порог × N) из кэша, 0 LLM-вызовов | `tests/test_entropy_ablation.py` (2) |
+| `configs/m3m6/few_shot.yaml` | 7 few-shot-примеров с ручным «Анализом», якоря обеих осей | `tests/test_few_shot_config.py` (5) |
+| `scripts/m3m6/make_figs.py` | боксплоты p по kind, reliability diagram, f1(t), scatter m6 | `tests/test_figs_logic.py` (2) |
+| `src/rag_reliability_m3m6/methods/m3/run_gepa.py` | DSPy/GEPA-оптимизация инструкции судьи; метрика ±маркеры; глосс из yaml | `tests/test_gepa_metric.py` (5) |
+| `src/rag_reliability_m3m6/methods/m3/gepa_report.py` | markdown-отчёт эволюции промпта из track_stats | I/O-глю, без юнит-теста |
+| `scripts/m3m6/entropy_ablation.py` | абляция entropy по (порог × N) из кэша, 0 LLM-вызовов | `tests/test_entropy_ablation.py` (2) |
 
 ### Изменённый код
 
 | Файл | Изменение |
 |---|---|
-| `src/rag_reliability/methods/m3/predict.py` | `--prompt-file` (override пути промпта для mode=gepa) и `--variant-name` (поддиректория predictions, чтобы прогоны markers/plain×seed не перетирали друг друга) |
-| `src/rag_reliability/methods/m6/sample.py` | `--n` (override `m6.n_samples`; нужен для добора до 10 сэмплов под абляцию) |
+| `src/rag_reliability_m3m6/methods/m3/predict.py` | `--prompt-file` (override пути промпта для mode=gepa) и `--variant-name` (поддиректория predictions, чтобы прогоны markers/plain×seed не перетирали друг друга) |
+| `src/rag_reliability_m3m6/methods/m6/sample.py` | `--n` (override `m6.n_samples`; нужен для добора до 10 сэмплов под абляцию) |
 | `configs/config.cloud.yaml` | секция `m3.gepa`: `train_size`, `auto`, `seeds`, `variants` (markers/plain → `use_marker_feedback` + `out_prompt`), `reflection` (72B, api_base, max_tokens) |
 | `requirements.txt` | `+matplotlib` |
 | `docs/05_tasks.md` | блок «Этап −0.5 — GEPA (cloud)», чекбоксы закрыты |
@@ -213,7 +213,7 @@ $2–5 на этап.
 
 ### Что сделано
 
-`scripts/entropy_ablation.py` считает NLI-матрицу **один раз на кейс** (полная матрица пар
+`scripts/m3m6/entropy_ablation.py` считает NLI-матрицу **один раз на кейс** (полная матрица пар
 `[answer]+samples` для max N) и строит кластеры (union-find по двунаправленному entailment)
 при всех (thr, N) срезами этой матрицы — **ноль LLM-вызовов**, из кэша сэмплов N=10
 (добраны `sample.py --n 10`). Тест на стабе NLI фиксирует: порог 0.45 даёт 1 кластер при
@@ -258,7 +258,7 @@ contradiction) не пересматривается. На реальном ко
 Одна команда на любых predictions:
 
 ```bash
-python scripts/make_figs.py --config configs/config.cloud.yaml --split val \
+python scripts/m3m6/make_figs.py --config configs/config.cloud.yaml --split val \
     --m3-pred predictions/cloud/m3/few_shot/val.jsonl \
     --m6-features artifacts/cloud/m6_features/val.jsonl
 ```
@@ -286,29 +286,29 @@ echo 'OPENROUTER_API_KEY=sk-or-...' > .env       # .env в .gitignore
 pytest tests/ -x -q                              # 62 passed
 
 # псевдо-корпус (300 кейсов) — если ещё нет
-python scripts/make_pseudo_corpus.py --config configs/config.cloud.yaml
+python scripts/m3m6/make_pseudo_corpus.py --config configs/config.cloud.yaml
 
 # Метод 3: базы
-python scripts/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val
-python scripts/run_m3.py --config configs/config.cloud.yaml --mode few_shot  --split val
+python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode zero_shot --split val
+python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode few_shot  --split val
 
 # GEPA: smoke → полная механика H5
-python scripts/run_gepa.py --config configs/config.cloud.yaml --variant markers --seed 0 \
+python scripts/m3m6/run_gepa.py --config configs/config.cloud.yaml --variant markers --seed 0 \
     --train-size 50 --auto light
-python scripts/run_gepa.py --config configs/config.cloud.yaml --variant markers --seed 0 --train-size 100
+python scripts/m3m6/run_gepa.py --config configs/config.cloud.yaml --variant markers --seed 0 --train-size 100
 #   … markers/plain × seed 0/1, затем инференс:
-python scripts/run_m3.py --config configs/config.cloud.yaml --mode gepa \
+python scripts/m3m6/run_m3.py --config configs/config.cloud.yaml --mode gepa \
     --prompt-file artifacts/cloud/m3_prompt_markers_seed0.txt --variant-name gepa_markers_s0 --split val
-python scripts/gepa_report.py --variant markers --seed 0
+python scripts/m3m6/gepa_report.py --variant markers --seed 0
 
 # Метод 6: сэмплы (N=10 для абляции) → фичи → абляция
-python scripts/prepare_m6_samples.py   --config configs/config.cloud.yaml --split val --n 10
-python scripts/prepare_m6_features.py  --config configs/config.cloud.yaml --split val
-python scripts/entropy_ablation.py --config configs/config.cloud.yaml --split val \
+python scripts/m3m6/prepare_m6_samples.py   --config configs/config.cloud.yaml --split val --n 10
+python scripts/m3m6/prepare_m6_features.py  --config configs/config.cloud.yaml --split val
+python scripts/m3m6/entropy_ablation.py --config configs/config.cloud.yaml --split val \
     --thresholds 0.3 0.4 0.5 --ns 3 5 10
 
 # Фигуры
-python scripts/make_figs.py --config configs/config.cloud.yaml --split val \
+python scripts/m3m6/make_figs.py --config configs/config.cloud.yaml --split val \
     --m3-pred predictions/cloud/m3/few_shot/val.jsonl \
     --m6-features artifacts/cloud/m6_features/val.jsonl
 ```

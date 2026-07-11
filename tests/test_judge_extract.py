@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from rag_reliability.common.llm_client import (
+from rag_reliability_m3m6.common.llm_client import (
     JudgeClient,
     _pass_prob,
     _verdict_positions,

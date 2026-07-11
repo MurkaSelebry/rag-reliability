@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from rag_reliability.data.alfa_loader import extract_last_client_turn, load_alfa
+from rag_reliability_m3m6.data.alfa_loader import extract_last_client_turn, load_alfa
 
 ROW = {
     "full_dialog": "Ассистент: Приветствую!\nКлиент: Какая ставка по вкладу?",

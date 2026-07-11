@@ -2,7 +2,7 @@
 
 import pytest
 
-from rag_reliability.analysis.figs import f1_threshold_curve, reliability_bins
+from rag_reliability_m3m6.analysis.figs import f1_threshold_curve, reliability_bins
 
 
 def test_reliability_bins_means():

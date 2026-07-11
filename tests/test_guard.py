@@ -2,13 +2,13 @@
 
 import pytest
 
-from rag_reliability.common.guard import (
+from rag_reliability_m3m6.common.guard import (
     DataLeakError,
     assert_case_cloud_safe,
     assert_cloud_safe,
     is_synthetic,
 )
-from rag_reliability.common.schemas import Case
+from rag_reliability_m3m6.common.schemas import Case
 
 
 def _case(id="case_001", **meta):
