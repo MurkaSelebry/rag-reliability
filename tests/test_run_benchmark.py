@@ -176,6 +176,18 @@ def test_build_method_command_for_m3_openai_judge(tmp_path: Path) -> None:
     assert "8" in run.run_command
 
 
+def test_build_method_command_for_independent(tmp_path: Path) -> None:
+    run = run_benchmark.build_method_run(
+        method="independent",
+        data=Path("data/dummy.jsonl"),
+        output_dir=tmp_path,
+        python="python",
+    )
+    assert run.run_command[0:2] == ["python", "scripts/run_independent.py"]
+    assert run.predictions_path == tmp_path / "independent" / "predictions.jsonl"
+    assert "--faithfulness-threshold" in run.run_command
+
+
 def test_build_method_run_passes_limit_to_runner_and_evaluator(tmp_path: Path) -> None:
     run = run_benchmark.build_method_run(
         method="m3_zero_shot",

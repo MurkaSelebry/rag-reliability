@@ -10,23 +10,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from rag_reliability.methods import registry
 
-METHODS = (
-    "dummy_direct",
-    "dummy_marker",
-    "prompt_direct",
-    "prompt_marker",
-    "lora_direct",
-    "lora_marker",
-    "lettucedetect",
-    "encoder",
-    "m3_zero_shot",
-    "m3_few_shot",
-    "m3_gepa",
-    "m3_openai",
-    "m3_openai_judge",
-    "m6_selfcheck",
-)
+METHODS = registry.all_method_names()
 
 
 @dataclass(frozen=True)
@@ -77,11 +63,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def parse_methods(raw_methods: str) -> list[str]:
-    methods = [method.strip() for method in raw_methods.split(",") if method.strip()]
-    unknown = [method for method in methods if method not in METHODS]
-    if unknown:
-        raise ValueError(f"Unknown method(s): {unknown}. Available: {METHODS}")
-    return methods
+    return registry.resolve_names(raw_methods)
 
 
 def build_evaluate_command(
@@ -106,7 +88,7 @@ def build_evaluate_command(
     return command
 
 
-def build_method_run(  # noqa: PLR0913, PLR0912
+def build_method_run(  # noqa: PLR0913
     method: str,
     data: Path,
     output_dir: Path,
@@ -138,176 +120,47 @@ def build_method_run(  # noqa: PLR0913, PLR0912
     m6_relevance_threshold: float = 0.25,
     limit: int | None = None,
 ) -> MethodRun:
-    if method not in METHODS:
-        raise ValueError(f"Unknown method {method!r}; expected one of {METHODS}")
-
+    spec = registry.get(method)
     run_dir = output_dir / method
     predictions_path = run_dir / "predictions.jsonl"
     metrics_path = run_dir / "metrics.json"
-
-    if method.startswith("dummy_"):
-        mode = method.removeprefix("dummy_")
-        command = [
-            python,
-            "scripts/run_prompt_baseline.py",
-            "--data",
-            str(data),
-            "--output",
-            str(predictions_path),
-            "--mode",
-            mode,
-            "--backend",
-            "dummy",
-            "--dummy-strategy",
-            "keyword" if mode == "marker" else "always_reliable",
-        ]
-        if limit is not None:
-            command.extend(["--limit", str(limit)])
-    elif method.startswith("prompt_"):
-        mode = method.removeprefix("prompt_")
-        command = [
-            python,
-            "scripts/run_prompt_baseline.py",
-            "--data",
-            str(data),
-            "--output",
-            str(predictions_path),
-            "--mode",
-            mode,
-            "--backend",
-            "mlx",
-            "--model",
-            model,
-            "--max-tokens",
-            str(max_tokens),
-        ]
-        if limit is not None:
-            command.extend(["--limit", str(limit)])
-    elif method.startswith("lora_"):
-        mode = method.removeprefix("lora_")
-        adapter_path = direct_adapter_path if mode == "direct" else marker_adapter_path
-        command = [
-            python,
-            "scripts/infer.py",
-            "--data",
-            str(data),
-            "--output",
-            str(predictions_path),
-            "--mode",
-            mode,
-            "--model",
-            model,
-            "--adapter-path",
-            adapter_path,
-            "--max-tokens",
-            str(max_tokens),
-        ]
-    elif method == "lettucedetect":
-        command = [
-            python,
-            "scripts/infer_lettucedetect.py",
-            "--data",
-            str(data),
-            "--model",
-            lettucedetect_model,
-            "--output",
-            str(predictions_path),
-        ]
-    elif method == "encoder":
-        checkpoint_dir = encoder_output_dir or str(run_dir / "checkpoints")
-        command = [
-            python,
-            "scripts/train_encoder_baseline.py",
-            "--data",
-            str(data),
-            "--output",
-            str(run_dir / "encoder_binary_metrics.json"),
-            "--predictions-output",
-            str(predictions_path),
-            "--model",
-            encoder_model,
-            "--output-dir",
-            checkpoint_dir,
-            "--max-length",
-            str(encoder_max_length),
-            "--batch-size",
-            str(encoder_batch_size),
-            "--epochs",
-            str(encoder_epochs),
-            "--learning-rate",
-            str(encoder_learning_rate),
-            "--pos-weight-mode",
-            encoder_pos_weight_mode,
-        ]
-    elif method.startswith("m3_"):
-        if method in ("m3_openai", "m3_openai_judge"):
-            m3_mode = "zero_shot"
-            backend = "openai" if method == "m3_openai" else "openai_judge"
-        else:
-            m3_mode = method.removeprefix("m3_")
-            backend = m3_backend
-        command = [
-            python,
-            "scripts/run_m3.py",
-            "--data",
-            str(data),
-            "--output",
-            str(predictions_path),
-            "--mode",
-            m3_mode,
-            "--backend",
-            backend,
-            "--model",
-            model,
-            "--max-tokens",
-            str(m3_max_tokens),
-        ]
-        if method in ("m3_openai", "m3_openai_judge"):
-            command.extend(
-                [
-                    "--api-base",
-                    m3_api_base,
-                    "--api-key-env",
-                    m3_api_key_env,
-                    "--cache-dir",
-                    m3_cache_dir,
-                ]
-            )
-        if method == "m3_openai_judge":
-            command.extend(["--concurrency", str(m3_concurrency)])
-        if method == "m3_few_shot":
-            command.extend(["--examples", m3_examples])
-        elif method == "m3_gepa":
-            command.extend(["--prompt-file", m3_prompt_file])
-        if m3_max_context_chars is not None:
-            command.extend(["--max-context-chars", str(m3_max_context_chars)])
-        if limit is not None:
-            command.extend(["--limit", str(limit)])
-    else:
-        command = [
-            python,
-            "scripts/run_m6_selfcheck.py",
-            "--data",
-            str(data),
-            "--features",
-            m6_features,
-            "--output",
-            str(predictions_path),
-            "--contradiction-threshold",
-            str(m6_contradiction_threshold),
-            "--entropy-threshold",
-            str(m6_entropy_threshold),
-            "--relevance-threshold",
-            str(m6_relevance_threshold),
-        ]
-        if limit is not None:
-            command.extend(["--limit", str(limit)])
-
+    ctx = registry.CommandContext(
+        data=data,
+        run_dir=run_dir,
+        predictions_path=predictions_path,
+        python=python,
+        model=model,
+        max_tokens=max_tokens,
+        direct_adapter_path=direct_adapter_path,
+        marker_adapter_path=marker_adapter_path,
+        lettucedetect_model=lettucedetect_model,
+        encoder_model=encoder_model,
+        encoder_output_dir=encoder_output_dir,
+        encoder_max_length=encoder_max_length,
+        encoder_batch_size=encoder_batch_size,
+        encoder_epochs=encoder_epochs,
+        encoder_learning_rate=encoder_learning_rate,
+        encoder_pos_weight_mode=encoder_pos_weight_mode,
+        m3_backend=m3_backend,
+        m3_max_tokens=m3_max_tokens,
+        m3_max_context_chars=m3_max_context_chars,
+        m3_examples=m3_examples,
+        m3_prompt_file=m3_prompt_file,
+        m3_api_base=m3_api_base,
+        m3_api_key_env=m3_api_key_env,
+        m3_cache_dir=m3_cache_dir,
+        m3_concurrency=m3_concurrency,
+        m6_features=m6_features,
+        m6_contradiction_threshold=m6_contradiction_threshold,
+        m6_entropy_threshold=m6_entropy_threshold,
+        m6_relevance_threshold=m6_relevance_threshold,
+        limit=limit,
+    )
     return MethodRun(
-        name=method,
+        name=spec.name,
         predictions_path=predictions_path,
         metrics_path=metrics_path,
-        run_command=command,
+        run_command=spec.build_command(ctx),
         evaluate_command=build_evaluate_command(python, data, predictions_path, metrics_path, limit),
     )
 
