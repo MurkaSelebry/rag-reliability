@@ -1,0 +1,21 @@
+{
+  "thresholds": {
+    "t_faith": 0.89,
+    "t_rel": 0.6,
+    "fitted_on": "val"
+  },
+  "val": {
+    "f1_macro_reliable": 0.5502218636546995,
+    "f1_macro_faith": 0.5204301075268817,
+    "f1_macro_rel": 0.5397316821465428,
+    "t_faith": 0.89,
+    "t_rel": 0.6,
+    "n": 223
+  },
+  "note": "абляция: только val (см. docs/13, стоп-правила)",
+  "extraction": {
+    "val": {
+      "logprobs": 223
+    }
+  }
+}

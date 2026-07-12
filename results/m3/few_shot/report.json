@@ -1,0 +1,50 @@
+{
+  "thresholds": {
+    "t_faith": 0.98,
+    "t_rel": 0.63,
+    "fitted_on": "val"
+  },
+  "val": {
+    "f1_macro_reliable": 0.571825244439193,
+    "f1_macro_faith": 0.5480840088430361,
+    "f1_macro_rel": 0.5072041014761779,
+    "t_faith": 0.98,
+    "t_rel": 0.63,
+    "n": 223
+  },
+  "test": {
+    "f1_macro_reliable": 0.5308555399719495,
+    "f1_macro_faith": 0.5148249342238413,
+    "f1_macro_rel": 0.4587378640776699,
+    "t_faith": 0.98,
+    "t_rel": 0.63,
+    "n": 223
+  },
+  "train": {
+    "f1_macro_reliable": 0.5318308796257587,
+    "f1_macro_faith": 0.5343081599166081,
+    "f1_macro_rel": 0.47549715768871853,
+    "t_faith": 0.98,
+    "t_rel": 0.63,
+    "n": 1787
+  },
+  "full": {
+    "f1_macro_reliable": 0.5359213318457263,
+    "f1_macro_faith": 0.5340094423076119,
+    "f1_macro_rel": 0.4766684617839477,
+    "t_faith": 0.98,
+    "t_rel": 0.63,
+    "n": 2233
+  },
+  "extraction": {
+    "train": {
+      "logprobs": 1787
+    },
+    "val": {
+      "logprobs": 223
+    },
+    "test": {
+      "logprobs": 223
+    }
+  }
+}

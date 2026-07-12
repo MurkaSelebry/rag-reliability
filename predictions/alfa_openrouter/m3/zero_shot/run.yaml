@@ -28,6 +28,7 @@ config:
     seed: 0
     gepa:
       train_size: 300
+      train_marker_share: 0.3
       auto: light
       seeds:
       - 0
@@ -61,10 +62,10 @@ config:
   tracking:
     enabled: true
     uri: file:./mlruns
-git_hash: 6301e454ab93e9cb643a1cf7a06fd73074e43665
+git_hash: c310df396dfc33a453b9040c4daa7521fe94b975
 profile: cloud
 seed: 0
-split: test
+split: train
 limit: null
 method: m3
 variant: zero_shot

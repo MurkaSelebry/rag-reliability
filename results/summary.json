@@ -1,0 +1,224 @@
+{
+  "m3": {
+    "zero_shot": {
+      "thresholds": {
+        "t_faith": 0.3,
+        "t_rel": 0.63,
+        "fitted_on": "val"
+      },
+      "val": {
+        "f1_macro_reliable": 0.5678294573643411,
+        "f1_macro_faith": 0.5582650273224044,
+        "f1_macro_rel": 0.5354166666666667,
+        "t_faith": 0.3,
+        "t_rel": 0.63,
+        "n": 223
+      },
+      "test": {
+        "f1_macro_reliable": 0.584053592539078,
+        "f1_macro_faith": 0.5776515151515151,
+        "f1_macro_rel": 0.4821981424148607,
+        "t_faith": 0.3,
+        "t_rel": 0.63,
+        "n": 223
+      },
+      "train": {
+        "f1_macro_reliable": 0.547841909135326,
+        "f1_macro_faith": 0.5507366963307396,
+        "f1_macro_rel": 0.4986060141803541,
+        "t_faith": 0.3,
+        "t_rel": 0.63,
+        "n": 1787
+      },
+      "full": {
+        "f1_macro_reliable": 0.5541256988625409,
+        "f1_macro_faith": 0.555019030607246,
+        "f1_macro_rel": 0.5001839126343702,
+        "t_faith": 0.3,
+        "t_rel": 0.63,
+        "n": 2233
+      },
+      "extraction": {
+        "train": {
+          "logprobs": 1787
+        },
+        "val": {
+          "logprobs": 223
+        },
+        "test": {
+          "logprobs": 223
+        }
+      }
+    },
+    "few_shot": {
+      "thresholds": {
+        "t_faith": 0.98,
+        "t_rel": 0.63,
+        "fitted_on": "val"
+      },
+      "val": {
+        "f1_macro_reliable": 0.571825244439193,
+        "f1_macro_faith": 0.5480840088430361,
+        "f1_macro_rel": 0.5072041014761779,
+        "t_faith": 0.98,
+        "t_rel": 0.63,
+        "n": 223
+      },
+      "test": {
+        "f1_macro_reliable": 0.5308555399719495,
+        "f1_macro_faith": 0.5148249342238413,
+        "f1_macro_rel": 0.4587378640776699,
+        "t_faith": 0.98,
+        "t_rel": 0.63,
+        "n": 223
+      },
+      "train": {
+        "f1_macro_reliable": 0.5318308796257587,
+        "f1_macro_faith": 0.5343081599166081,
+        "f1_macro_rel": 0.47549715768871853,
+        "t_faith": 0.98,
+        "t_rel": 0.63,
+        "n": 1787
+      },
+      "full": {
+        "f1_macro_reliable": 0.5359213318457263,
+        "f1_macro_faith": 0.5340094423076119,
+        "f1_macro_rel": 0.4766684617839477,
+        "t_faith": 0.98,
+        "t_rel": 0.63,
+        "n": 2233
+      },
+      "extraction": {
+        "train": {
+          "logprobs": 1787
+        },
+        "val": {
+          "logprobs": 223
+        },
+        "test": {
+          "logprobs": 223
+        }
+      }
+    },
+    "zero_shot_72b": {
+      "thresholds": {
+        "t_faith": 0.11,
+        "t_rel": 0.01,
+        "fitted_on": "val"
+      },
+      "val": {
+        "f1_macro_reliable": 0.5894489588623667,
+        "f1_macro_faith": 0.5712237249470425,
+        "f1_macro_rel": 0.47030878859857483,
+        "t_faith": 0.11,
+        "t_rel": 0.01,
+        "n": 223
+      },
+      "note": "абляция: только val (см. docs/13, стоп-правила)",
+      "extraction": {
+        "val": {
+          "regex": 223
+        }
+      }
+    },
+    "few_shot_72b": {
+      "thresholds": {
+        "t_faith": 0.11,
+        "t_rel": 0.11,
+        "fitted_on": "val"
+      },
+      "val": {
+        "f1_macro_reliable": 0.5235042735042735,
+        "f1_macro_faith": 0.49842555105713,
+        "f1_macro_rel": 0.5194299617657282,
+        "t_faith": 0.11,
+        "t_rel": 0.11,
+        "n": 223
+      },
+      "note": "абляция: только val (см. docs/13, стоп-правила)",
+      "extraction": {
+        "val": {
+          "regex": 222,
+          "default": 1
+        }
+      }
+    },
+    "gepa_markers_s0": {
+      "thresholds": {
+        "t_faith": 0.89,
+        "t_rel": 0.6,
+        "fitted_on": "val"
+      },
+      "val": {
+        "f1_macro_reliable": 0.5502218636546995,
+        "f1_macro_faith": 0.5204301075268817,
+        "f1_macro_rel": 0.5397316821465428,
+        "t_faith": 0.89,
+        "t_rel": 0.6,
+        "n": 223
+      },
+      "note": "абляция: только val (см. docs/13, стоп-правила)",
+      "extraction": {
+        "val": {
+          "logprobs": 223
+        }
+      }
+    }
+  },
+  "baselines": {
+    "majority": {
+      "val": {
+        "f1_macro_reliable": 0.4296675191815857,
+        "f1_macro_faith": 0.434010152284264,
+        "f1_macro_rel": 0.47030878859857483,
+        "t_faith": 0.01,
+        "t_rel": 0.01,
+        "n": 223
+      },
+      "test": {
+        "f1_macro_reliable": 0.4053333333333333,
+        "f1_macro_faith": 0.40848806366047746,
+        "f1_macro_rel": 0.4587378640776699,
+        "t_faith": 0.01,
+        "t_rel": 0.01,
+        "n": 223
+      }
+    },
+    "surface": {
+      "val": {
+        "f1_macro_reliable": 0.6132947976878613,
+        "f1_macro_faith": 0.5752380952380952,
+        "f1_macro_rel": 0.5467479674796748,
+        "t_faith": 0.44,
+        "t_rel": 0.35000000000000003,
+        "n": 223
+      },
+      "test": {
+        "f1_macro_reliable": 0.5981981981981982,
+        "f1_macro_faith": 0.5845934692088538,
+        "f1_macro_rel": 0.5097361809045227,
+        "t_faith": 0.44,
+        "t_rel": 0.35000000000000003,
+        "n": 223
+      }
+    },
+    "surface_e5": {
+      "val": {
+        "f1_macro_reliable": 0.6149622123467973,
+        "f1_macro_faith": 0.598174460166012,
+        "f1_macro_rel": 0.5713478064224333,
+        "t_faith": 0.43,
+        "t_rel": 0.37,
+        "n": 223
+      },
+      "test": {
+        "f1_macro_reliable": 0.5372997490831886,
+        "f1_macro_faith": 0.5288423742138364,
+        "f1_macro_rel": 0.5210855134713003,
+        "t_faith": 0.43,
+        "t_rel": 0.37,
+        "n": 223
+      }
+    }
+  }
+}

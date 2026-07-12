@@ -1,0 +1,11 @@
+# make check (pytest + ruff) — 2026-07-12, git c310df3, ветка m3-m6
+# Python 3.12, окружение .venv (uv)
+
+$ .venv/bin/python -m pytest -q
+........................................................................ [ 72%]
+............................                                             [100%]
+100 passed, 11 warnings in 17.46s
+(предупреждения — DeprecationWarning из dspy, к коду проекта отношения не имеют)
+
+$ .venv/bin/python -m ruff check .
+All checks passed!

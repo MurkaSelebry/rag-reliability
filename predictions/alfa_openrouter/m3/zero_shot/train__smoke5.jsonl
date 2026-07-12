@@ -1,0 +1,5 @@
+{"id": "alfa_002eb0d854a2", "p_faith": 0.5926525651782838, "p_rel": 0.9046078782749054, "meta": {"mode": "zero_shot", "variant": "zero_shot", "method": "logprobs", "raw": "FAITHFULNESS: PASS\nRELEVANCE: PASS"}}
+{"id": "alfa_0208899f928a", "p_faith": 0.9241153660071931, "p_rel": 0.9940863287414262, "meta": {"mode": "zero_shot", "variant": "zero_shot", "method": "logprobs", "raw": "FAITHFULNESS: PASS\nRELEVANCE: PASS"}}
+{"id": "alfa_0258e7e4aabe", "p_faith": 0.999925167475152, "p_rel": 0.9999039201268306, "meta": {"mode": "zero_shot", "variant": "zero_shot", "method": "logprobs", "raw": "FAITHFULNESS: PASS\nRELEVANCE: PASS"}}
+{"id": "alfa_0735ee42db0d", "p_faith": 0.6224054503437982, "p_rel": 0.9046131633699435, "meta": {"mode": "zero_shot", "variant": "zero_shot", "method": "logprobs", "raw": "FAITHFULNESS: PASS\nRELEVANCE: PASS"}}
+{"id": "alfa_078db99cc6d8", "p_faith": 0.2017889889998593, "p_rel": 0.9148541629010987, "meta": {"mode": "zero_shot", "variant": "zero_shot", "method": "logprobs", "raw": "FAITHFULNESS: FAIL\nRELEVANCE: PASS"}}

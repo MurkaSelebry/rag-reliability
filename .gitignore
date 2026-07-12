@@ -35,3 +35,10 @@ venv/
 
 # Служебные каталоги Claude Code
 .claude/worktrees/
+
+# сырьё и сплиты платформы — не коммитить (CLAUDE.md)
+data/raw/
+data/processed/
+
+# lock-файлы MS Office
+~$*
