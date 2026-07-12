@@ -1,0 +1,26 @@
+{
+  "_note": "Полный прогон без LLM на всём датасете организаторов (2233 кейса после дедупа, provisional group-сплиты 1787/223/223, seed=42). Пороги t_faith/t_rel подобраны сеткой на val, применены к test без изменений (common/eval_local.py).",
+  "data": "alfa (real, полный корпус кураторов из data.zip)",
+  "variants": {
+    "majority": {
+      "val": {"f1_macro_reliable": 0.4296675191815857, "f1_macro_faith": 0.434010152284264, "f1_macro_rel": 0.47030878859857483, "t_faith": 0.01, "t_rel": 0.01, "n": 223},
+      "test": {"f1_macro_reliable": 0.4053333333333333, "f1_macro_faith": 0.40848806366047746, "f1_macro_rel": 0.4587378640776699, "t_faith": 0.01, "t_rel": 0.01, "n": 223}
+    },
+    "surface": {
+      "description": "логрег на поверхностных фичах (длины, n-грамм overlap, digit_match, url/nav), без эмбеддингов",
+      "val": {"f1_macro_reliable": 0.6132947976878613, "f1_macro_faith": 0.5752380952380952, "f1_macro_rel": 0.5467479674796748, "t_faith": 0.44, "t_rel": 0.35, "n": 223},
+      "test": {"f1_macro_reliable": 0.5981981981981982, "f1_macro_faith": 0.5845934692088538, "f1_macro_rel": 0.5097361809045227, "t_faith": 0.44, "t_rel": 0.35, "n": 223}
+    },
+    "surface_e5": {
+      "description": "surface + косинусы intfloat/multilingual-e5-large (query-answer, ctx-answer), локальная модель, без внешних вызовов",
+      "val": {"f1_macro_reliable": 0.6149622123467973, "f1_macro_faith": 0.598174460166012, "f1_macro_rel": 0.5713478064224333, "t_faith": 0.43, "t_rel": 0.37, "n": 223},
+      "test": {"f1_macro_reliable": 0.5372997490831886, "f1_macro_faith": 0.5288423742138364, "f1_macro_rel": 0.5210855134713003, "t_faith": 0.43, "t_rel": 0.37, "n": 223}
+    }
+  },
+  "best_on_test": "surface (0.598) — surface_e5 переобучается под val (0.615) и не переносится на test (0.537), см. docs/13",
+  "curator_encoder_reference": {
+    "status": "CPU-smoke из прошлой сессии (120/120 кейсов), полный прогон на 1796/449 при max_length=8096 непрактичен на CPU — нужен GPU",
+    "source": "predictions/local/baselines/curator_encoder/curator_metrics.json",
+    "f1_macro": 0.5392827043730687
+  }
+}

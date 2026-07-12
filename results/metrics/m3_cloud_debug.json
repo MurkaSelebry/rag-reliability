@@ -1,0 +1,34 @@
+{
+  "_note": "НЕ финальные числа ветки. Это существующие результаты прошлой авторизованной cloud-сессии (2026-07-08, configs/config.alfa_cloud.yaml, OpenRouter opt-in владельца данных), уже закоммиченные в predictions/alfa_openrouter/m3/*. Свежий прогон в этой сессии невозможен: нет локального vLLM, а отправка реальных данных в облако заблокирована harness'ом (см. results/README.md §3.1). Источник чисел: docs/13_openrouter_stage.md + predictions/alfa_openrouter/m3/*/report_*.json.",
+  "profile": "cloud",
+  "data": "alfa (real, group split 1787/223/223)",
+  "variants": {
+    "zero_shot_7b": {
+      "val": {"f1_macro_reliable": 0.5678294573643411, "f1_macro_faith": 0.5582650273224044, "f1_macro_rel": 0.5354166666666667, "t_faith": 0.3, "t_rel": 0.63, "n": 223},
+      "test": {"f1_macro_reliable": 0.584053592539078, "f1_macro_faith": 0.5776515151515151, "f1_macro_rel": 0.4821981424148607, "t_faith": 0.3, "t_rel": 0.63, "n": 223},
+      "extraction": "100% logprobs"
+    },
+    "few_shot_7b": {
+      "val": {"f1_macro_reliable": 0.571825244439193, "f1_macro_faith": 0.5480840088430361, "f1_macro_rel": 0.5072041014761779, "t_faith": 0.98, "t_rel": 0.63, "n": 223},
+      "test": {"f1_macro_reliable": 0.5308555399719495, "f1_macro_faith": 0.5148249342238413, "f1_macro_rel": 0.4587378640776699, "t_faith": 0.98, "t_rel": 0.63, "n": 223},
+      "extraction": "100% logprobs"
+    },
+    "zero_shot_72b": {
+      "val": {"f1_macro_reliable": 0.5894489588623667, "f1_macro_faith": 0.5712237249470425, "f1_macro_rel": 0.47030878859857483, "t_faith": 0.11, "t_rel": 0.01, "n": 223},
+      "test": null,
+      "extraction": "regex-fallback (провайдеры OpenRouter для 72B не отдавали top_logprobs)"
+    },
+    "few_shot_72b": {
+      "val": {"f1_macro_reliable": 0.5235042735042735, "f1_macro_faith": 0.49842555105713, "f1_macro_rel": 0.5194299617657282, "t_faith": 0.11, "t_rel": 0.11, "n": 223},
+      "test": null,
+      "extraction": "regex-fallback"
+    },
+    "gepa_markers_light_seed0": {
+      "val": {"f1_macro_reliable": 0.5502218636546995, "f1_macro_faith": 0.5204301075268817, "f1_macro_rel": 0.5397316821465428, "t_faith": 0.89, "t_rel": 0.6, "n": 223},
+      "test": null,
+      "note": "light-checkpoint < few_shot → стоп-правило, полные H5-прогоны (markers/plain x 3 seed) не запускались"
+    }
+  },
+  "comparison_local_baseline_surface_test": 0.5982,
+  "conclusion": "LLM-as-judge без обучения проигрывает поверхностному логрегу на реальном корпусе на всей проверенной лестнице (zero_shot/few_shot/72B/GEPA-light); см. docs/13_openrouter_stage.md §2 для диагностики."
+}
