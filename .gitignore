@@ -20,3 +20,8 @@ results/*
 
 # OS
 .DS_Store
+
+# materialized organizer splits (reproducible via dataset.split_samples)
+data/organizers_train.jsonl
+data/organizers_val.jsonl
+data/organizers_test.jsonl
