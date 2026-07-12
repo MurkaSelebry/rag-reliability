@@ -138,7 +138,11 @@ GPU (для NLI/эмбеддингов, на GPU то же самое счита
 |---|---|---|---|---|
 | majority | 0.4297 | 0.4053 | 0.4085 | 0.4587 |
 | surface (логрег, без эмбеддингов) | 0.6133 | 0.5982 | 0.5846 | 0.5097 |
-| surface+e5 (+ косинусы e5-large) | _см. `results/metrics/baselines_summary.json`_ | | | |
+| surface+e5 (+ косинусы e5-large) | 0.6150 | 0.5373 | 0.5288 | 0.5211 |
+
+`surface` — лучший на test (0.598); `surface+e5` выигрывает на val (0.615), но
+не переносится на test (0.537) — e5-косинусы переобучаются под val (та же
+картина, что в прошлой cloud-сессии, `docs/13`).
 
 Полные отчёты: `predictions/local/baselines/{majority,surface,surface_e5}/report_{val,test}.json`.
 
