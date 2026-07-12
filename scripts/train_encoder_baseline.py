@@ -36,6 +36,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="results/encoder_checkpoints")
     parser.add_argument("--test-size", type=float, default=0.2)
     parser.add_argument("--validation-size", type=float, default=0.1)
+    parser.add_argument("--train-data", default=None, help="Explicit train split (bypasses internal split)")
+    parser.add_argument("--val-data", default=None, help="Explicit validation split")
+    parser.add_argument("--test-data", default=None, help="Explicit test split; scores these exact rows")
     parser.add_argument("--max-length", type=int, default=512)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--epochs", type=float, default=2)
@@ -221,13 +224,18 @@ def train_and_evaluate(args: argparse.Namespace) -> dict[str, float | int | str]
     from transformers import AutoTokenizer, DataCollatorWithPadding, Trainer, TrainingArguments  # noqa: PLC0415
 
     set_seed(args.seed)
-    samples = load_jsonl(args.data)
-    train_samples, validation_samples, test_samples = split_samples(
-        samples,
-        test_size=args.test_size,
-        validation_size=args.validation_size,
-        seed=args.seed,
-    )
+    if args.test_data:
+        train_samples = load_jsonl(args.train_data)
+        validation_samples = load_jsonl(args.val_data)
+        test_samples = load_jsonl(args.test_data)
+    else:
+        samples = load_jsonl(args.data)
+        train_samples, validation_samples, test_samples = split_samples(
+            samples,
+            test_size=args.test_size,
+            validation_size=args.validation_size,
+            seed=args.seed,
+        )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     train_ds = make_dataset(train_samples, tokenizer, args.max_length)
