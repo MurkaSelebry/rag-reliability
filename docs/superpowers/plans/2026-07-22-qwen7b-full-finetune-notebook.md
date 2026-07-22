@@ -148,13 +148,13 @@ Code cell 1 (install + platform):
 import importlib, subprocess, sys
 
 PKGS = [
-    "transformers==4.46.3",
-    "trl==0.12.2",
-    "accelerate==1.1.1",
-    "datasets==3.1.0",
-    "peft==0.13.2",
-    "bitsandbytes==0.44.1",
-    "deepspeed==0.15.4",
+    "transformers>=4.56.2",   # floor; platform-sensitive, let Colab/Kaggle's build win
+    "trl==1.8.0",             # exact; assistant_only_loss needs >=0.19.0, API verified at 1.8.0
+    "accelerate>=1.4.0",
+    "datasets>=4.7.0",
+    "peft>=0.8.0",
+    "bitsandbytes>=0.44.1",   # floor; QLORA_FALLBACK path only
+    "deepspeed>=0.14.4",
     "sentencepiece",
     "psutil",
 ]
@@ -492,7 +492,7 @@ def train_fn():
         per_device_train_batch_size=PER_DEVICE_BATCH,
         gradient_accumulation_steps=GRAD_ACCUM,
         learning_rate=LR,
-        max_seq_length=MAX_SEQ_LEN,
+        max_length=MAX_SEQ_LEN,        # trl>=1.x renamed max_seq_length -> max_length
         bf16=True,
         gradient_checkpointing=True,
         assistant_only_loss=True,      # == mlx --mask-prompt: loss on assistant tokens only
