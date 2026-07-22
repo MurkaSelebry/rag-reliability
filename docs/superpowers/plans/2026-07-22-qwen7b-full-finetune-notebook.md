@@ -156,6 +156,7 @@ PKGS = [
     "bitsandbytes==0.44.1",
     "deepspeed==0.15.4",
     "sentencepiece",
+    "psutil",
 ]
 def _pip(args): subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *args])
 try:
@@ -325,9 +326,9 @@ CPU_RAM_GB = psutil.virtual_memory().total / 1e9
 MULTI_PROC = False
 if TOTAL_VRAM_GB >= 48 and N_GPUS == 1:
     PROFILE = "full_single"
-elif N_GPUS >= 1 and MIN_GPU_GB >= 22:          # 1x40GB single-proc ZeRO-3 offload
+elif N_GPUS == 1 and MIN_GPU_GB >= 22:          # 1x40GB single-proc ZeRO-3 offload
     PROFILE = "full_zero3_offload"
-elif N_GPUS >= 2:                                # e.g. 2xT4: shard via notebook_launcher
+elif N_GPUS >= 2:                                # 2xT4 / 2x24GB / 2x40GB: shard via notebook_launcher
     PROFILE, MULTI_PROC = "full_zero3_offload", True
 else:
     PROFILE = "insufficient"
