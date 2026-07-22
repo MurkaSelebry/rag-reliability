@@ -122,12 +122,29 @@ the `scripts/infer.py` / `scripts/evaluate.py` invocation for reference (and
 as a target for such a backend, if one is added later), but until that
 backend exists, treat cell 8's in-notebook evaluation as authoritative.
 
-### Output
+### Real data
 
-Training writes to `OUTPUT_DIR` (`ft_direct` or `ft_marker`), then cell 9
-copies the checkpoint to the resolved `SAVE_TARGET` location (Drive /
-`/kaggle/working` / local working dir) so it survives runtime disconnects.
-Pushing to the Hugging Face Hub is available but commented out and opt-in.
+For a real run, produce `organizers.jsonl` with `scripts/prepare_data.py`,
+upload it to the runtime, and in cell 3 set `USE_REAL_DATA = True` and
+`REAL_DATA_PATH` to the uploaded file (on DataSphere, put it on the mounted
+storage). The split (80/10/10, stratified by `reliable`, seed 42) and every
+other cell stay the same. Defaults (`EPOCHS=3`, `LR=1e-5`, `MAX_SEQ_LEN=2048`)
+are reasonable starting points for full FT; a multi-hour run benefits from
+`SAVE_STRATEGY="epoch"` (resumable checkpoints — only enable it where the
+output disk has room for several ~15GB checkpoints).
+
+### Output and getting the model out
+
+Training writes to `OUTPUT_DIR` (needs ~2× the model size free, ~30GB for 7B),
+then cell 9 copies the checkpoint to the resolved `SAVE_TARGET` location (Drive
+/ `/kaggle/working` / local working dir) so it survives runtime disconnects.
+
+To download or reuse the ~15GB full model, the recommended path is the
+**Hugging Face Hub**: set `PUSH_TO_HUB=True`, `HUB_MODEL_ID`, and a write
+`HF_TOKEN` in cell 3; cell 9 then uploads `OUTPUT_DIR` to a private Hub repo,
+and you can load it anywhere with
+`AutoModelForCausalLM.from_pretrained(HUB_MODEL_ID)`. Alternatively download the
+checkpoint directory directly from the platform file manager.
 
 ## Yandex DataSphere — extra setup (real full FT on A100 80GB)
 
