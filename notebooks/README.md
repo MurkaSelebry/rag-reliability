@@ -79,8 +79,8 @@ hardware that lands you in one of the first three:
 
 | Profile | Requirement | Notes |
 |---|---|---|
-| `full_single` | 1 GPU, ≥ ~48GB VRAM (e.g. A100/H100 80GB) | Whole model + optimizer states fit on one GPU; no DeepSpeed needed. |
-| `full_zero3_offload` (single-proc) | 1 GPU, ≥22GB and below the 48GB `full_single` threshold (e.g. 40GB A100/L4), and ≥ ~60GB CPU RAM | DeepSpeed ZeRO-3 with CPU offload of optimizer + parameters; the notebook warns (but does not stop) if CPU RAM looks short. |
+| `full_single` | 1 GPU, ≥ ~70GB VRAM (i.e. an 80GB A100/H100) | Whole model + 8-bit-AdamW optimizer states fit on one GPU; no DeepSpeed needed. A bare 48GB card is intentionally routed to offload instead — too tight for full 7B FT. |
+| `full_zero3_offload` (single-proc) | 1 GPU, ≥22GB and below the 70GB `full_single` threshold (e.g. 40–48GB A100/L4/L40), and ≥ ~60GB CPU RAM | DeepSpeed ZeRO-3 with CPU offload of optimizer + parameters; the notebook warns (but does not stop) if CPU RAM looks short. |
 | `full_zero3_offload` (multi-proc) | ≥ 2 GPUs (e.g. 2×T4) | Same DeepSpeed ZeRO-3 CPU-offload config, sharded across processes launched via `accelerate.notebook_launcher`. |
 | `insufficient` | A single GPU below the thresholds above | Hard stop (`RuntimeError`) unless `QLORA_FALLBACK=True` — full fine-tuning of a 7B model is not possible on that hardware. |
 

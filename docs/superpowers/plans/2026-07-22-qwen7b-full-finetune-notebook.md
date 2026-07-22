@@ -324,7 +324,7 @@ MIN_GPU_GB = min(per_gpu) if per_gpu else 0.0
 CPU_RAM_GB = psutil.virtual_memory().total / 1e9
 
 MULTI_PROC = False
-if TOTAL_VRAM_GB >= 48 and N_GPUS == 1:
+if TOTAL_VRAM_GB >= 70 and N_GPUS == 1:   # 80GB-class only; a bare 48GB card is tight -> route to offload
     PROFILE = "full_single"
 elif N_GPUS == 1 and MIN_GPU_GB >= 22:          # 1x40GB single-proc ZeRO-3 offload
     PROFILE = "full_zero3_offload"
@@ -500,6 +500,7 @@ def train_fn():
         gradient_checkpointing=True,
         assistant_only_loss=True,      # == mlx --mask-prompt: loss on assistant tokens only
         eval_strategy="epoch",
+        per_device_eval_batch_size=1,  # cap eval logits spike (default 8)
         logging_steps=5,
         save_strategy="epoch",
         report_to="none",
