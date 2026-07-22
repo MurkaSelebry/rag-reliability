@@ -128,3 +128,55 @@ Training writes to `OUTPUT_DIR` (`ft_direct` or `ft_marker`), then cell 9
 copies the checkpoint to the resolved `SAVE_TARGET` location (Drive /
 `/kaggle/working` / local working dir) so it survives runtime disconnects.
 Pushing to the Hugging Face Hub is available but commented out and opt-in.
+
+## Yandex DataSphere — extra setup (real full FT on A100 80GB)
+
+DataSphere's `DS Default` image is older than the 2026 training stack and its
+project disk is tiny (~10 GB), so a run there needs three DataSphere-specific
+steps that Colab/Kaggle don't. This recipe is battle-tested for the `g2.1`
+config (1× A100 80 GB, 119 GB RAM).
+
+**1. Attach a large file storage.** The 10 GB project disk cannot hold the
+~15 GB model cache *and* the ~15 GB checkpoint. Create a File Storage
+(Ресурсы проекта → Файловое хранилище → **Активировать**), then **restart the
+compute VM** (stop the running instance — a kernel restart is not enough; the
+mount is injected only when a fresh VM starts). It appears at
+`/home/jupyter/filestore/<name>/`. Point both the HF cache and the output there.
+
+**2. Install a driver-matched stack.** DataSphere's driver is CUDA 12.2, so the
+PyPI `torch` that `trl`/`transformers` would otherwise pull (CUDA 13) fails with
+"driver too old", and the base `torch` (2.0.1/cu118) is too old for `trl 1.8`.
+Pin `torch==2.5.1` on **cu121**. Also pin `numpy==1.26.4` **last** — new enough
+for `trl`'s typing, old enough (`<2`) to keep the base image's numpy-1-compiled
+C-extensions (`soxr`, `scipy`, `sklearn`, `numba`) ABI-compatible; numpy 2 breaks
+them. Run this as the first cell (replacing cell 1's installer), then
+**Restart Kernel**:
+
+```python
+import os, subprocess, sys
+BASE = "/home/jupyter/filestore/<name>"          # your mounted storage
+os.environ["HF_HOME"] = BASE + "/hf"              # model cache on the big disk
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+def pip(*a): subprocess.check_call([sys.executable, "-m", "pip", "install", *a])
+pip("torch==2.5.1", "torchvision==0.20.1", "torchaudio==2.5.1",
+    "--index-url", "https://download.pytorch.org/whl/cu121")
+pip("transformers>=4.56.2", "trl==1.8.0", "accelerate>=1.4.0", "datasets==4.7.0",
+    "peft>=0.8.0", "bitsandbytes>=0.44.1", "pydantic>=2.5", "sentencepiece", "psutil")
+pip("numpy==1.26.4")   # LAST — overrides any numpy 2 pulled above
+```
+
+`HF_HOME` and `PYTORCH_CUDA_ALLOC_CONF` reset on every kernel restart, so also
+set them at the very top of cell 1 (before any `transformers` import).
+
+**3. Point the output at the big disk and don't re-run cell 7 dirty.** In cell 3
+set `OUTPUT_DIR = f"{BASE}/ft_{MODE}"` (the default relative `ft_{MODE}` lands on
+the 10 GB disk and the ~15 GB save fails with `No space left on device`). In
+cell 7 set `save_strategy="no"` (per-epoch checkpoints include the optimizer
+state and blow the disk). Each cell-7 run leaks GPU memory, so **Restart Kernel
+before re-running cell 7** — otherwise the second run OOMs on an already-full
+80 GB GPU.
+
+Everything else (cells 2, 4–9) runs unchanged. `PLATFORM` auto-detects as
+`datasphere`, so cell 9 leaves the checkpoint in place on the mounted storage
+(no copy). Remember DataSphere billing: stop the VM and deactivate/delete the
+file storage when done.
