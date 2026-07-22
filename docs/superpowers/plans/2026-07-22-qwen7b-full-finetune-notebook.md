@@ -145,17 +145,18 @@ Code cell 1 (install + platform):
 
 ```python
 # --- Install pinned deps (skip if already present) ---
-import importlib, subprocess, sys
+import subprocess, sys
 
 PKGS = [
-    "transformers==4.46.3",
-    "trl==0.12.2",
-    "accelerate==1.1.1",
-    "datasets==3.1.0",
-    "peft==0.13.2",
-    "bitsandbytes==0.44.1",
-    "deepspeed==0.15.4",
+    "transformers>=4.56.2",   # floor; platform-sensitive, let Colab/Kaggle's build win
+    "trl==1.8.0",             # exact; assistant_only_loss needs >=0.19.0, API verified at 1.8.0
+    "accelerate>=1.4.0",
+    "datasets>=4.7.0",
+    "peft>=0.8.0",
+    "bitsandbytes>=0.44.1",   # floor; QLORA_FALLBACK path only
+    "deepspeed>=0.14.4",
     "sentencepiece",
+    "psutil",
 ]
 def _pip(args): subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *args])
 try:
@@ -323,11 +324,11 @@ MIN_GPU_GB = min(per_gpu) if per_gpu else 0.0
 CPU_RAM_GB = psutil.virtual_memory().total / 1e9
 
 MULTI_PROC = False
-if TOTAL_VRAM_GB >= 48 and N_GPUS == 1:
+if TOTAL_VRAM_GB >= 70 and N_GPUS == 1:   # 80GB-class only; a bare 48GB card is tight -> route to offload
     PROFILE = "full_single"
-elif N_GPUS >= 1 and MIN_GPU_GB >= 22:          # 1x40GB single-proc ZeRO-3 offload
+elif N_GPUS == 1 and MIN_GPU_GB >= 22:          # 1x40GB single-proc ZeRO-3 offload
     PROFILE = "full_zero3_offload"
-elif N_GPUS >= 2:                                # e.g. 2xT4: shard via notebook_launcher
+elif N_GPUS >= 2:                                # 2xT4 / 2x24GB / 2x40GB: shard via notebook_launcher
     PROFILE, MULTI_PROC = "full_zero3_offload", True
 else:
     PROFILE = "insufficient"
@@ -423,8 +424,8 @@ def load_model_and_tokenizer():
             load_in_4bit=True, bnb_4bit_quant_type="nf4",
             bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_use_double_quant=True,
         )
-    # ZeRO-3 sets device placement itself; full_single loads to the one GPU.
-    if PROFILE == "full_single" and not QLORA_FALLBACK:
+    # ZeRO-3 sets device placement itself; full_single + QLoRA load to the one GPU.
+    if QLORA_FALLBACK or PROFILE == "full_single":
         kwargs["device_map"] = {"": 0}
     model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, **kwargs)
     model.config.use_cache = False
@@ -491,10 +492,15 @@ def train_fn():
         per_device_train_batch_size=PER_DEVICE_BATCH,
         gradient_accumulation_steps=GRAD_ACCUM,
         learning_rate=LR,
-        max_seq_length=MAX_SEQ_LEN,
+        # 8-bit AdamW for full_single/QLoRA (fp32 AdamW OOMs a 7B even on 80GB);
+        # DeepSpeed offload path manages its own optimizer memory on CPU.
+        optim=("adamw_torch" if (PROFILE == "full_zero3_offload" and not QLORA_FALLBACK) else "adamw_bnb_8bit"),
+        max_length=MAX_SEQ_LEN,        # trl>=1.x renamed max_seq_length -> max_length
         bf16=True,
         gradient_checkpointing=True,
         assistant_only_loss=True,      # == mlx --mask-prompt: loss on assistant tokens only
+        eval_strategy="epoch",
+        per_device_eval_batch_size=1,  # cap eval logits spike (default 8)
         logging_steps=5,
         save_strategy="epoch",
         report_to="none",
@@ -540,7 +546,8 @@ git commit -m "Notebook: DeepSpeed config + SFTTrainer train fn + launch"
 
 ```python
 # --- Evaluate: greedy generate on test, parse, score with repo metrics ---
-import torch
+import gc, torch
+gc.collect(); torch.cuda.empty_cache()   # reclaim the training model's GPU memory first
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from rag_reliability.prompts import build_direct_prompt, build_marker_prompt
 

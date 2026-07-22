@@ -45,6 +45,7 @@ pipelines stay as standalone `scripts/*.py` invocations (see
 | [docs/m3_m6.md](docs/m3_m6.md) | Selective Method 3/6 port from the `m3-m6` branch |
 | [docs/experiments.md](docs/experiments.md) | All results so far, how to reproduce, environment gotchas |
 | [docs/diagrams/](docs/diagrams/README.md) | PlantUML architecture, benchmark pipeline, method taxonomy, and sample data-flow diagrams |
+| [notebooks/qwen7b_full_finetune.ipynb](notebooks/README.md) | Full fine-tune Qwen2.5-7B on Method 1/2 in Colab/Kaggle/DataSphere (GPU cloud) |
 
 ## Quickstart
 
