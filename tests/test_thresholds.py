@@ -37,7 +37,7 @@ def test_macro_f1_matches_sklearn() -> None:
 
 
 def test_fit_recovers_separating_thresholds() -> None:
-    # reliable ровно при p_faith >= 0.3 и p_rel >= 0.6 — идеально разделимо
+    # Reliable exactly when p_faith >= 0.3 and p_rel >= 0.6: perfectly separable.
     samples, preds = [], []
     grid = [0.1, 0.2, 0.35, 0.5, 0.65, 0.9]
     i = 0
