@@ -77,6 +77,9 @@ def eval(  # noqa: A001 - CLI verb
     predictions: Path = typer.Option(..., help="Predictions JSONL to score."),
     output: Path = typer.Option(..., help="Where to write metrics.json."),
     limit: int | None = typer.Option(None, help="Score only the first N samples."),
+    val_data: Path | None = typer.Option(None, help="Val dataset to fit thresholds on."),
+    val_predictions: Path | None = typer.Option(None, help="Val predictions with probs."),
+    grid_step: float = typer.Option(0.01, help="Threshold grid step."),
 ) -> None:
     command = [
         sys.executable, "scripts/evaluate.py",
@@ -84,6 +87,17 @@ def eval(  # noqa: A001 - CLI verb
     ]
     if limit is not None:
         command.extend(["--limit", str(limit)])
+    if val_data is not None and val_predictions is not None:
+        command.extend(
+            [
+                "--val-data",
+                str(val_data),
+                "--val-predictions",
+                str(val_predictions),
+                "--grid-step",
+                str(grid_step),
+            ]
+        )
     subprocess.run(command, check=True)
 
 
