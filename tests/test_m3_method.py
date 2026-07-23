@@ -16,6 +16,7 @@ from rag_reliability.methods.m3 import (
     build_user_prompt,
     parse_m3_prediction,
 )
+from rag_reliability import run_meta
 from rag_reliability.run_meta import write_run_meta
 from rag_reliability.schema import RagSample
 
@@ -135,6 +136,17 @@ def test_write_run_meta(tmp_path: Path) -> None:
     assert payload["args"]["model"] == "m"
     assert "git_hash" in payload
     assert "timestamp" in payload
+
+
+def test_git_short_hash_returns_none_when_git_cannot_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_permission_error(*args, **kwargs) -> None:
+        raise PermissionError("git unavailable")
+
+    monkeypatch.setattr(run_meta.subprocess, "run", raise_permission_error)
+
+    assert run_meta.git_short_hash() is None
 
 
 @pytest.mark.parametrize("backend", ["dummy", "openai_judge"])
