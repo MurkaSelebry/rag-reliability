@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-base", default="http://localhost:8000/v1")
     parser.add_argument("--api-key-env", default="OPENAI_API_KEY")
     parser.add_argument("--cache-dir", default=None)
+    parser.add_argument("--run-meta", default=None)
     parser.add_argument("--max-tokens", type=int, default=400)
     parser.add_argument("--max-context-chars", type=int, default=None)
     parser.add_argument("--limit", type=int, default=None)
@@ -104,6 +105,10 @@ def main() -> None:
         save_jsonl(predictions, args.output)
         invalid = sum(prediction.invalid_output for prediction in predictions)
         print(f"Wrote {len(predictions)} predictions to {args.output} (invalid outputs: {invalid})")
+        if args.run_meta:
+            from rag_reliability.run_meta import write_run_meta  # noqa: PLC0415
+
+            write_run_meta(args.run_meta, args)
         return
 
     if args.backend == "dummy":
@@ -156,6 +161,10 @@ def main() -> None:
     save_jsonl(predictions, args.output)
     invalid = sum(prediction.invalid_output for prediction in predictions)
     print(f"Wrote {len(predictions)} predictions to {args.output} (invalid outputs: {invalid})")
+    if args.run_meta:
+        from rag_reliability.run_meta import write_run_meta  # noqa: PLC0415
+
+        write_run_meta(args.run_meta, args)
 
 
 if __name__ == "__main__":

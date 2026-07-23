@@ -46,7 +46,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--encoder-epochs", type=float, default=3)
     parser.add_argument("--encoder-learning-rate", type=float, default=2e-5)
     parser.add_argument("--encoder-pos-weight-mode", choices=["balanced", "none"], default="none")
-    parser.add_argument("--m3-backend", choices=["dummy", "mlx", "openai"], default="mlx")
+    parser.add_argument(
+        "--m3-backend", choices=["dummy", "mlx", "openai", "openai_judge"], default="mlx"
+    )
     parser.add_argument("--m3-max-tokens", type=int, default=400)
     parser.add_argument("--m3-max-context-chars", type=int, default=None)
     parser.add_argument("--m3-examples", default="configs/few_shot.yaml")

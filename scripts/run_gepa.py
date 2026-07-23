@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 from pathlib import Path
 
 from rag_reliability.dataset import load_jsonl
@@ -26,6 +25,7 @@ from rag_reliability.methods.m3.gepa import (
     subsample_train,
 )
 from rag_reliability.methods.m3.prompts import SEED_INSTRUCTION
+from rag_reliability.run_meta import git_short_hash
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,18 +58,6 @@ def parse_args() -> argparse.Namespace:
         help="Defaults to results/gepa/m3_optimized_prompt_{variant}_seed{seed}.txt",
     )
     return parser.parse_args()
-
-
-def _git_hash() -> str | None:
-    try:
-        return subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
 
 
 def main() -> None:  # noqa: PLR0915
@@ -146,7 +134,7 @@ def main() -> None:  # noqa: PLR0915
         "reflection_model": args.reflection_model or args.model,
         "task_lm_calls": len(getattr(task_lm, "history", []) or []),
         "reflection_lm_calls": len(getattr(reflection_lm, "history", []) or []),
-        "git_hash": _git_hash(),
+        "git_hash": git_short_hash(),
         "seed_instruction": SEED_INSTRUCTION,
         "best_instruction": instruction,
         "detailed_results": serialize_detailed(getattr(optimized, "detailed_results", None)),

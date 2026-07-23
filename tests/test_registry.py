@@ -1,4 +1,5 @@
 # tests/test_registry.py
+from dataclasses import replace
 from pathlib import Path
 
 from rag_reliability.methods import registry
@@ -73,6 +74,16 @@ def test_m3_gepa_default_prompt_is_committed_path(tmp_path: Path) -> None:
 
     assert "configs/m3_gepa_prompt.txt" in argv
     assert "configs/m3_gepa_prompt.txt" in registry.get("m3_gepa").requires
+
+
+def test_named_m3_mode_with_openai_judge_backend_gets_api_args(tmp_path: Path) -> None:
+    ctx = replace(_ctx(tmp_path), m3_backend="openai_judge")
+
+    argv = registry.get("m3_zero_shot").build_command(ctx)
+
+    assert "--api-base" in argv
+    assert "--cache-dir" in argv
+    assert "--concurrency" in argv
 
 
 def test_demo_runner_keys_are_known(tmp_path: Path) -> None:

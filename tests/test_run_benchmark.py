@@ -202,3 +202,11 @@ def test_build_method_run_passes_limit_to_runner_and_evaluator(tmp_path: Path) -
     assert "25" in run.run_command
     assert "--limit" in run.evaluate_command
     assert "25" in run.evaluate_command
+
+
+def test_m3_backend_accepts_openai_judge(monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["run_benchmark.py", "--m3-backend", "openai_judge"])
+
+    args = run_benchmark.parse_args()
+
+    assert args.m3_backend == "openai_judge"

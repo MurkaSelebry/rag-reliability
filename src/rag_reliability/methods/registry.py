@@ -200,7 +200,11 @@ def _m3(name: str) -> BuildCommand:
             "--max-tokens",
             str(ctx.m3_max_tokens),
         ]
-        if name in ("m3_openai", "m3_openai_judge"):
+        uses_openai = name in ("m3_openai", "m3_openai_judge") or backend in (
+            "openai",
+            "openai_judge",
+        )
+        if uses_openai:
             command.extend(
                 [
                     "--api-base",
@@ -211,7 +215,7 @@ def _m3(name: str) -> BuildCommand:
                     ctx.m3_cache_dir,
                 ]
             )
-        if name == "m3_openai_judge":
+        if name == "m3_openai_judge" or backend == "openai_judge":
             command.extend(["--concurrency", str(ctx.m3_concurrency)])
         if name == "m3_few_shot":
             command.extend(["--examples", ctx.m3_examples])
