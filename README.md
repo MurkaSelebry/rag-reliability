@@ -146,10 +146,10 @@ features, or an evolved prompt).
 | `encoder` | encoder | `results/encoder_checkpoints_512_best` | yes |
 | `m3_zero_shot` | m3 | MLX model | yes |
 | `m3_few_shot` | m3 | `configs/few_shot.yaml` | yes |
-| `m3_gepa` | m3 | evolved prompt file | batch-only |
+| `m3_gepa` | m3 | `configs/m3_gepa_prompt.txt` | batch-only |
 | `m3_openai` | m3 | OpenAI-compatible endpoint | batch-only |
 | `m3_openai_judge` | m3 | OpenAI-compatible endpoint | batch-only |
-| `m6_selfcheck` | m6 | `results/m6/features.jsonl` | batch-only |
+| `m6_selfcheck` | m6 | m6 pipeline | batch-only |
 | `independent` | independent | — | yes |
 
 This table mirrors `registry.METHODS`; run `rag-judge list-methods` for the
@@ -166,8 +166,9 @@ same information straight from the code.
   features, then a logistic regression predicts faithfulness and relevance.
 - **Method 3 judge** (`m3_*`): a prompt judge in zero-shot, few-shot, GEPA, and
   OpenAI-endpoint variants; `m3_openai_judge` scores via token logprobs.
-- **Method 6 SelfCheck** (`m6_selfcheck`): consumes a precomputed feature JSONL;
-  sample generation, NLI scoring, and calibration stay explicit prep steps.
+- **Method 6 SelfCheck** (`m6_selfcheck`): the m6 pipeline generates samples,
+  computes NLI contradiction/entropy and relevance features, then applies its
+  thresholds.
 - **Supervised encoder**: a RuModernBERT reliability classifier.
 - **Independent rule-based**: heuristic thresholds over faithfulness/relevance
   signals, no model required.
@@ -196,6 +197,7 @@ numbers traceable to [docs/experiments.md](docs/experiments.md):
 | Trivial floor (`always_reliable`) | 0.4194 | majority-class baseline |
 | Qwen zero-shot, direct (Method 1) | 0.4946 | 0% invalid output |
 | **RuModernBERT encoder (best)** | **0.5879** | 512 tok, 3 epochs, lr 2e-5, no weighting, tuned threshold 0.72 |
+| Methods 3/6 organizer threshold-fitted evaluation | pending Track B | aldem `split_samples` (seed 42); do not compare with skol grouped splits (seed 2233) |
 
 On the 36-sample dummy set, zero-shot direct reaches `reliable_f1 = 0.86`
 (toy scale — see the experiments doc for caveats).

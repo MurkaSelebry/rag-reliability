@@ -44,6 +44,20 @@ run with `learning_rate=2e-5`. Lowering LR to `1e-5` and raising it to `3e-5`
 both hurt test macro-F1. Longer context at 1024 fits in memory but hurts
 macro-F1 because the model becomes too positive.
 
+## Methods 3/6 — organizer data (val-fitted thresholds)
+
+Pending Track B. This table is reserved for test metrics after fitting each
+method's thresholds on the validation split only; no organizer result is
+recorded here yet.
+
+| variant | test reliable_f1_macro | t_faith | t_rel | invalid_rate | notes |
+|---|---:|---:|---:|---:|---|
+| pending Track B | pending | pending | pending | pending | fill with threshold-report output only |
+
+The aldem results use `split_samples` with seed 42. They are incomparable with
+skol results, which use grouped splits with seed 2233; never mix the numbers
+in a leaderboard or comparison.
+
 ## LoRA benchmark status (organizer data, 2026-07-09)
 
 Organizer direct/marker LoRA benchmark files are prepared under
