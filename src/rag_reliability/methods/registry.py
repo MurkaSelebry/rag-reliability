@@ -36,6 +36,10 @@ class CommandContext:
     m3_cache_dir: str = "results/m3/cache"
     m3_concurrency: int = 1
     m6_features: str = "results/m6/features.jsonl"
+    m6_backend: str = "dummy"
+    m6_samples_dir: str = "results/m6/samples"
+    m6_n_samples: int = 5
+    m6_api_base: str = "http://localhost:8000/v1"
     m6_contradiction_threshold: float = 0.5
     m6_entropy_threshold: float = 1.0
     m6_relevance_threshold: float = 0.25
@@ -229,25 +233,31 @@ def _m3(name: str) -> BuildCommand:
 
 
 def _m6(ctx: CommandContext) -> list[str]:
-    return _maybe_limit(
-        [
-            ctx.python,
-            "scripts/run_m6_selfcheck.py",
-            "--data",
-            str(ctx.data),
-            "--features",
-            ctx.m6_features,
-            "--output",
-            str(ctx.predictions_path),
-            "--contradiction-threshold",
-            str(ctx.m6_contradiction_threshold),
-            "--entropy-threshold",
-            str(ctx.m6_entropy_threshold),
-            "--relevance-threshold",
-            str(ctx.m6_relevance_threshold),
-        ],
-        ctx,
-    )
+    command = [
+        ctx.python,
+        "scripts/run_m6_pipeline.py",
+        "--data",
+        str(ctx.data),
+        "--samples-dir",
+        ctx.m6_samples_dir,
+        "--features",
+        ctx.m6_features,
+        "--output",
+        str(ctx.predictions_path),
+        "--backend",
+        ctx.m6_backend,
+        "--n-samples",
+        str(ctx.m6_n_samples),
+        "--contradiction-threshold",
+        str(ctx.m6_contradiction_threshold),
+        "--entropy-threshold",
+        str(ctx.m6_entropy_threshold),
+        "--relevance-threshold",
+        str(ctx.m6_relevance_threshold),
+    ]
+    if ctx.m6_backend == "openai":
+        command.extend(["--model", ctx.model, "--api-base", ctx.m6_api_base])
+    return _maybe_limit(command, ctx)
 
 
 def _independent(ctx: CommandContext) -> list[str]:
@@ -282,7 +292,15 @@ METHODS: dict[str, MethodSpec] = {
     "m3_gepa": MethodSpec("m3_gepa", "Method 3 — GEPA prompt", "m3", None, _m3("m3_gepa"), None, ("configs/m3_gepa_prompt.txt",)),
     "m3_openai": MethodSpec("m3_openai", "Method 3 — OpenAI endpoint", "m3", None, _m3("m3_openai"), None, ("OpenAI-compatible endpoint",)),
     "m3_openai_judge": MethodSpec("m3_openai_judge", "Method 3 — OpenAI logprob judge", "m3", None, _m3("m3_openai_judge"), None, ("OpenAI-compatible endpoint",)),
-    "m6_selfcheck": MethodSpec("m6_selfcheck", "Method 6 — SelfCheck features", "m6", None, _m6, None, ("results/m6/features.jsonl",)),
+    "m6_selfcheck": MethodSpec(
+        "m6_selfcheck",
+        "Method 6 — SelfCheck features",
+        "m6",
+        None,
+        _m6,
+        None,
+        ("m6 pipeline (dummy offline; real: --m6-backend openai + .[m6])",),
+    ),
     "independent": MethodSpec("independent", "Independent rule-based evaluator", "independent", None, _independent, "independent"),
 }
 

@@ -86,6 +86,26 @@ def test_named_m3_mode_with_openai_judge_backend_gets_api_args(tmp_path: Path) -
     assert "--concurrency" in argv
 
 
+def test_m6_build_command_uses_single_command_pipeline(tmp_path: Path) -> None:
+    ctx = replace(
+        _ctx(tmp_path),
+        model="remote-model",
+        m6_backend="openai",
+        m6_samples_dir="cache/m6",
+        m6_n_samples=7,
+        m6_api_base="https://example.test/v1",
+    )
+
+    argv = registry.get("m6_selfcheck").build_command(ctx)
+
+    assert argv[0:2] == ["python", "scripts/run_m6_pipeline.py"]
+    assert argv[argv.index("--samples-dir") + 1] == "cache/m6"
+    assert argv[argv.index("--backend") + 1] == "openai"
+    assert argv[argv.index("--n-samples") + 1] == "7"
+    assert argv[argv.index("--model") + 1] == "remote-model"
+    assert argv[argv.index("--api-base") + 1] == "https://example.test/v1"
+
+
 def test_demo_runner_keys_are_known(tmp_path: Path) -> None:
     allowed = {"dummy", "prompt", "lora", "lettucedetect", "encoder", "m3", "independent"}
     for spec in registry.METHODS.values():

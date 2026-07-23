@@ -58,6 +58,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m3-cache-dir", default="results/m3/cache")
     parser.add_argument("--m3-concurrency", type=int, default=1)
     parser.add_argument("--m6-features", default="results/m6/features.jsonl")
+    parser.add_argument("--m6-backend", choices=["dummy", "mlx", "openai"], default="dummy")
+    parser.add_argument("--m6-samples-dir", default="results/m6/samples")
+    parser.add_argument("--m6-n-samples", type=int, default=5)
     parser.add_argument("--m6-contradiction-threshold", type=float, default=0.5)
     parser.add_argument("--m6-entropy-threshold", type=float, default=1.0)
     parser.add_argument("--m6-relevance-threshold", type=float, default=0.25)
@@ -117,6 +120,9 @@ def build_method_run(  # noqa: PLR0913
     m3_cache_dir: str = "results/m3/cache",
     m3_concurrency: int = 1,
     m6_features: str = "results/m6/features.jsonl",
+    m6_backend: str = "dummy",
+    m6_samples_dir: str = "results/m6/samples",
+    m6_n_samples: int = 5,
     m6_contradiction_threshold: float = 0.5,
     m6_entropy_threshold: float = 1.0,
     m6_relevance_threshold: float = 0.25,
@@ -153,6 +159,9 @@ def build_method_run(  # noqa: PLR0913
         m3_cache_dir=m3_cache_dir,
         m3_concurrency=m3_concurrency,
         m6_features=m6_features,
+        m6_backend=m6_backend,
+        m6_samples_dir=m6_samples_dir,
+        m6_n_samples=m6_n_samples,
         m6_contradiction_threshold=m6_contradiction_threshold,
         m6_entropy_threshold=m6_entropy_threshold,
         m6_relevance_threshold=m6_relevance_threshold,
@@ -203,6 +212,9 @@ def main() -> None:
             m3_cache_dir=args.m3_cache_dir,
             m3_concurrency=args.m3_concurrency,
             m6_features=args.m6_features,
+            m6_backend=args.m6_backend,
+            m6_samples_dir=args.m6_samples_dir,
+            m6_n_samples=args.m6_n_samples,
             m6_contradiction_threshold=args.m6_contradiction_threshold,
             m6_entropy_threshold=args.m6_entropy_threshold,
             m6_relevance_threshold=args.m6_relevance_threshold,
