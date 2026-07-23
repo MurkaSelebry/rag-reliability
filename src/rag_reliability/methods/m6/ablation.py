@@ -15,6 +15,13 @@ _ENTROPY_KEY = "semantic_entropy"
 _RELEVANCE_KEY = "cos_q_a"
 
 
+def _unit_interval_grid(grid_step: float) -> np.ndarray:
+    """Return ascending thresholds in [0, 1], always including the endpoint."""
+    if not np.isfinite(grid_step) or grid_step <= 0:
+        raise ValueError("grid_step must be a positive finite number")
+    return np.append(np.arange(0.0, 1.0, grid_step), 1.0)
+
+
 def _ordered_feature_rows(
     samples: list[RagSample], features_by_id: Mapping[str, Mapping[str, Any]]
 ) -> list[Mapping[str, Any]]:
@@ -54,13 +61,10 @@ def fit_feature_thresholds(
     Thresholds are scanned in ascending order and are updated only on a strict
     score improvement, which makes ties resolve to the earliest grid point.
     """
-    if grid_step <= 0:
-        raise ValueError("grid_step must be positive")
-
     contradiction, entropy, relevance, y_reliable = _feature_arrays(
         samples, features_by_id, use_entropy=use_entropy
     )
-    grid = np.arange(0.0, 1.0 + grid_step, grid_step)
+    grid = _unit_interval_grid(grid_step)
     contra_hits = contradiction[None, :] <= grid[:, None]
     relevance_hits = relevance[None, :] >= grid[:, None]
     entropy_grid = np.unique(np.append(entropy, np.inf)) if use_entropy else np.array([np.inf])

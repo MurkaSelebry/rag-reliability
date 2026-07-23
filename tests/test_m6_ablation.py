@@ -81,3 +81,25 @@ def test_score_applies_val_thresholds_to_other_set() -> None:
     expected = macro_f1_binary(np.array([sample.reliable for sample in test_samples]), expected_pred)
 
     assert actual == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("grid_step", [0.3, 1.5])
+def test_fit_grid_is_bounded_and_includes_unit_endpoint(grid_step: float) -> None:
+    samples = [
+        make_sample("reliable", 1),
+        make_sample("near_relevant", 0),
+        make_sample("unreliable", 0),
+    ]
+    features = {
+        "reliable": {"selfcheck_contra_mean": 1.0, "cos_q_a": 1.0},
+        "near_relevant": {"selfcheck_contra_mean": 1.0, "cos_q_a": 0.95},
+        "unreliable": {"selfcheck_contra_mean": 0.0, "cos_q_a": 0.0},
+    }
+
+    fit = fit_feature_thresholds(samples, features, use_entropy=False, grid_step=grid_step)
+
+    assert fit["t_contra"] == pytest.approx(1.0)
+    assert fit["t_rel"] == pytest.approx(1.0)
+    assert fit["val_reliable_f1_macro"] == pytest.approx(1.0)
+    assert 0.0 <= fit["t_contra"] <= 1.0
+    assert 0.0 <= fit["t_rel"] <= 1.0
