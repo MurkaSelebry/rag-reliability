@@ -12,6 +12,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import prepare_m6_features as m6_features  # noqa: E402
@@ -89,16 +90,34 @@ def ensure_samples(samples: list[RagSample], args: argparse.Namespace) -> None:
     )
 
 
-def ensure_features(samples: list[RagSample], args: argparse.Namespace) -> None:
+def _feature_work(
+    samples: list[RagSample], args: argparse.Namespace
+) -> tuple[list[RagSample], dict[str, dict[str, Any]]]:
     features_path = Path(args.features)
-    existing_ids: set[str] = set()
+    existing_features: dict[str, dict[str, Any]] = {}
     if features_path.exists() and not args.refresh_features:
-        existing_ids = set(load_features(features_path))
-    pending = [sample for sample in samples if sample.id not in existing_ids]
-    if not pending and not args.refresh_features:
+        existing_features = load_features(features_path)
+    pending = (
+        samples
+        if args.refresh_features
+        else [sample for sample in samples if sample.id not in existing_features]
+    )
+    return pending, existing_features
+
+
+def ensure_features(
+    samples: list[RagSample],
+    args: argparse.Namespace,
+    *,
+    work: tuple[list[RagSample], dict[str, dict[str, Any]]] | None = None,
+) -> None:
+    if work is None:
+        work = _feature_work(samples, args)
+    pending, existing_features = work
+    if not pending:
+        if args.refresh_features:
+            save_jsonl([], args.features)
         return
-    if args.refresh_features:
-        pending, existing_ids = samples, set()
 
     features_backend = args.features_backend or (
         "dummy" if args.backend == "dummy" else "real"
@@ -127,12 +146,7 @@ def ensure_features(samples: list[RagSample], args: argparse.Namespace) -> None:
         entail_threshold=args.entail_threshold,
         use_n_samples=args.use_n_samples,
     )
-    kept = (
-        [row for row_id, row in load_features(features_path).items() if row_id in existing_ids]
-        if existing_ids
-        else []
-    )
-    save_jsonl(kept + rows, args.features)
+    save_jsonl([*existing_features.values(), *rows], args.features)
 
 
 def main() -> None:
@@ -140,8 +154,11 @@ def main() -> None:
     samples = load_jsonl(args.data)
     if args.limit is not None:
         samples = samples[: args.limit]
-    ensure_samples(samples, args)
-    ensure_features(samples, args)
+    work = _feature_work(samples, args)
+    pending, _ = work
+    if pending:
+        ensure_samples(pending, args)
+    ensure_features(samples, args, work=work)
     predictions = predictions_from_feature_rows(
         samples,
         load_features(args.features),

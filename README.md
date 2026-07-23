@@ -6,7 +6,7 @@
 One registry of methods, one `rag-judge` CLI, one `predictions → metrics` contract.
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-135%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-passing-2ea44f)
 ![Lint](https://img.shields.io/badge/lint-ruff-000000)
 ![Methods](https://img.shields.io/badge/methods-15-8250df)
 ![Project](https://img.shields.io/badge/SMILES-2026-f5792a)

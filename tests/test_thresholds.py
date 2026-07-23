@@ -60,6 +60,36 @@ def test_fit_tie_break_deterministic() -> None:
     assert (fit_a.t_faith, fit_a.t_rel) == (fit_b.t_faith, fit_b.t_rel) == (0.0, 0.0)
 
 
+@pytest.mark.parametrize("grid_step", [0.3, 1.5])
+def test_fit_grid_is_bounded_and_includes_unit_endpoint(grid_step: float) -> None:
+    samples = [
+        make_sample(0, 1, 1),
+        make_sample(1, 0, 0),
+        make_sample(2, 0, 0),
+    ]
+    preds = [
+        make_pred(0, 1.0, 1.0),
+        make_pred(1, 1.0, 0.95),
+        make_pred(2, 0.0, 0.0),
+    ]
+
+    fit = fit_thresholds(samples, preds, grid_step=grid_step)
+
+    assert fit.t_rel == pytest.approx(1.0)
+    assert fit.val_reliable_f1_macro == pytest.approx(1.0)
+    assert 0.0 <= fit.t_faith <= 1.0
+    assert 0.0 <= fit.t_rel <= 1.0
+
+
+@pytest.mark.parametrize("grid_step", [0.0, -0.1, np.inf, np.nan])
+def test_fit_rejects_invalid_grid_step(grid_step: float) -> None:
+    samples = [make_sample(0, 1, 1)]
+    preds = [make_pred(0, 1.0, 1.0)]
+
+    with pytest.raises(ValueError, match="grid_step must be a positive finite number"):
+        fit_thresholds(samples, preds, grid_step=grid_step)
+
+
 def test_extract_probs_raises_on_missing() -> None:
     good = make_pred(0, 0.7, 0.7)
     bad = Prediction(id="s1", faithfulness_pred=1, relevance_pred=1)

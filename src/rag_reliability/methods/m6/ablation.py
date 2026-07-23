@@ -8,19 +8,11 @@ from typing import Any
 import numpy as np
 
 from rag_reliability.schema import RagSample
-from rag_reliability.thresholds import macro_f1_binary
+from rag_reliability.thresholds import macro_f1_binary, unit_interval_grid
 
 _CONTRADICTION_KEY = "selfcheck_contra_mean"
 _ENTROPY_KEY = "semantic_entropy"
 _RELEVANCE_KEY = "cos_q_a"
-
-
-def _unit_interval_grid(grid_step: float) -> np.ndarray:
-    """Return ascending thresholds in [0, 1], always including the endpoint."""
-    if not np.isfinite(grid_step) or grid_step <= 0:
-        raise ValueError("grid_step must be a positive finite number")
-    return np.append(np.arange(0.0, 1.0, grid_step), 1.0)
-
 
 def _ordered_feature_rows(
     samples: list[RagSample], features_by_id: Mapping[str, Mapping[str, Any]]
@@ -64,7 +56,7 @@ def fit_feature_thresholds(
     contradiction, entropy, relevance, y_reliable = _feature_arrays(
         samples, features_by_id, use_entropy=use_entropy
     )
-    grid = _unit_interval_grid(grid_step)
+    grid = unit_interval_grid(grid_step)
     contra_hits = contradiction[None, :] <= grid[:, None]
     relevance_hits = relevance[None, :] >= grid[:, None]
     entropy_grid = np.unique(np.append(entropy, np.inf)) if use_entropy else np.array([np.inf])

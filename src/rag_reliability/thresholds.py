@@ -23,6 +23,13 @@ class ThresholdFit:
     grid_step: float
 
 
+def unit_interval_grid(grid_step: float) -> np.ndarray:
+    """Return ascending thresholds in [0, 1], always including the endpoint."""
+    if not np.isfinite(grid_step) or grid_step <= 0:
+        raise ValueError("grid_step must be a positive finite number")
+    return np.append(np.arange(0.0, 1.0, grid_step), 1.0)
+
+
 def extract_probs(predictions: list[Prediction]) -> tuple[np.ndarray, np.ndarray]:
     """Return (p_faith, p_rel) arrays; raise naming ids without probabilities."""
     missing = [
@@ -68,7 +75,7 @@ def fit_thresholds(
     ordered = _ordered_predictions(samples, predictions)
     p_faith, p_rel = extract_probs(ordered)
     y_reliable = np.array([s.reliable for s in samples], dtype=int)
-    grid = np.arange(0.0, 1.0 + grid_step / 2, grid_step)
+    grid = unit_interval_grid(grid_step)
     faith_hits = p_faith[None, :] >= grid[:, None]  # (G, n)
     rel_hits = p_rel[None, :] >= grid[:, None]
     best_score, best_tf, best_tr = -1.0, 0.0, 0.0
