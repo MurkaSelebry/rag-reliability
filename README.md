@@ -52,6 +52,17 @@ read from it, so adding a method surfaces it everywhere at once.
 
 ![Component architecture](docs/diagrams/architecture.png)
 
+## At a glance
+
+`rag-judge` is the single entry point for running, benchmarking, and scoring
+every method against the shared `predictions.jsonl` → `metrics.json`
+contract. Fifteen methods are registered, from a zero-config dummy baseline
+to LoRA-tuned and Method 3/6 judges; `rag-judge list-methods` prints exactly
+what's available and what each one requires. Training and data-prep
+pipelines stay as standalone `scripts/*.py` invocations (see
+[Advanced / pipelines](#advanced--pipelines)) since they produce artifacts
+(adapters, checkpoints, prompts) that methods later consume.
+
 ## Quickstart
 
 Requires Python ≥ 3.11. Target hardware: Apple Silicon (MLX); everything
@@ -270,6 +281,7 @@ python scripts/train_encoder_baseline.py \
 | [docs/m3_m6.md](docs/m3_m6.md) | Selective Method 3/6 port from the `m3-m6` branch |
 | [docs/experiments.md](docs/experiments.md) | All results so far, how to reproduce, environment gotchas |
 | [docs/diagrams/](docs/diagrams/README.md) | PlantUML architecture, benchmark pipeline, method taxonomy, and sample data-flow diagrams |
+| [notebooks/qwen7b_full_finetune.ipynb](notebooks/README.md) | Full fine-tune Qwen2.5-7B on Method 1/2 in Colab/Kaggle/DataSphere (GPU cloud) |
 
 ## Project layout
 
@@ -280,7 +292,7 @@ src/rag_reliability/    schema, prompts, formatting, parsing, metrics,
                         dataset IO, dummy predictors, mlx backend, methods,
                         method registry, rag-judge CLI
 scripts/                CLI entry points — run from repo root
-tests/                  unit tests (135, no MLX required)
+tests/                  unit tests (no MLX required)
 docs/                   architecture / data / training / experiments / diagrams
 results/                predictions, metrics, adapters (gitignored)
 ```
