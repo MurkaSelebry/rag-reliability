@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m3-max-tokens", type=int, default=400)
     parser.add_argument("--m3-max-context-chars", type=int, default=None)
     parser.add_argument("--m3-examples", default="configs/few_shot.yaml")
-    parser.add_argument("--m3-prompt-file", default="artifacts/m3_optimized_prompt.txt")
+    parser.add_argument("--m3-prompt-file", default="configs/m3_gepa_prompt.txt")
     parser.add_argument("--m3-api-base", default="http://localhost:8000/v1")
     parser.add_argument("--m3-api-key-env", default="OPENAI_API_KEY")
     parser.add_argument("--m3-cache-dir", default="results/m3/cache")
@@ -109,7 +109,7 @@ def build_method_run(  # noqa: PLR0913
     m3_max_tokens: int = 400,
     m3_max_context_chars: int | None = None,
     m3_examples: str = "configs/few_shot.yaml",
-    m3_prompt_file: str = "artifacts/m3_optimized_prompt.txt",
+    m3_prompt_file: str = "configs/m3_gepa_prompt.txt",
     m3_api_base: str = "http://localhost:8000/v1",
     m3_api_key_env: str = "OPENAI_API_KEY",
     m3_cache_dir: str = "results/m3/cache",

@@ -66,6 +66,15 @@ def test_every_spec_builds_a_nonempty_argv(tmp_path: Path) -> None:
         assert argv and argv[0] == "python"
 
 
+def test_m3_gepa_default_prompt_is_committed_path(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path)
+
+    argv = registry.get("m3_gepa").build_command(ctx)
+
+    assert "configs/m3_gepa_prompt.txt" in argv
+    assert "configs/m3_gepa_prompt.txt" in registry.get("m3_gepa").requires
+
+
 def test_demo_runner_keys_are_known(tmp_path: Path) -> None:
     allowed = {"dummy", "prompt", "lora", "lettucedetect", "encoder", "m3", "independent"}
     for spec in registry.METHODS.values():

@@ -129,9 +129,9 @@ def method_statuses(
             "artifact": "configs/few_shot.yaml",
         },
         "m3_gepa": {
-            "available": False,
-            "artifact": None,
-            "reason": "batch-only: requires an evolved prompt file",
+            "available": Path("configs/m3_gepa_prompt.txt").exists(),
+            "artifact": "configs/m3_gepa_prompt.txt",
+            "reason": "generate an evolved prompt with scripts/run_gepa.py",
         },
         "m3_openai": {
             "available": False,

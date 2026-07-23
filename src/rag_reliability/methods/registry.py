@@ -30,7 +30,7 @@ class CommandContext:
     m3_max_tokens: int = 400
     m3_max_context_chars: int | None = None
     m3_examples: str = "configs/few_shot.yaml"
-    m3_prompt_file: str = "artifacts/m3_optimized_prompt.txt"
+    m3_prompt_file: str = "configs/m3_gepa_prompt.txt"
     m3_api_base: str = "http://localhost:8000/v1"
     m3_api_key_env: str = "OPENAI_API_KEY"
     m3_cache_dir: str = "results/m3/cache"
@@ -275,7 +275,7 @@ METHODS: dict[str, MethodSpec] = {
     "encoder": MethodSpec("encoder", "RuModernBERT encoder", "encoder", None, _encoder, "encoder", ("results/encoder_checkpoints_512_best",)),
     "m3_zero_shot": MethodSpec("m3_zero_shot", "Method 3 — zero-shot judge", "m3", None, _m3("m3_zero_shot"), "m3", ("MLX model",)),
     "m3_few_shot": MethodSpec("m3_few_shot", "Method 3 — few-shot judge", "m3", None, _m3("m3_few_shot"), "m3", ("configs/few_shot.yaml",)),
-    "m3_gepa": MethodSpec("m3_gepa", "Method 3 — GEPA prompt", "m3", None, _m3("m3_gepa"), None, ("evolved prompt file",)),
+    "m3_gepa": MethodSpec("m3_gepa", "Method 3 — GEPA prompt", "m3", None, _m3("m3_gepa"), None, ("configs/m3_gepa_prompt.txt",)),
     "m3_openai": MethodSpec("m3_openai", "Method 3 — OpenAI endpoint", "m3", None, _m3("m3_openai"), None, ("OpenAI-compatible endpoint",)),
     "m3_openai_judge": MethodSpec("m3_openai_judge", "Method 3 — OpenAI logprob judge", "m3", None, _m3("m3_openai_judge"), None, ("OpenAI-compatible endpoint",)),
     "m6_selfcheck": MethodSpec("m6_selfcheck", "Method 6 — SelfCheck features", "m6", None, _m6, None, ("results/m6/features.jsonl",)),

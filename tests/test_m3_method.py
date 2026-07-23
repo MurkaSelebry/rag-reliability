@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from rag_reliability.methods.m3 import (
@@ -113,3 +114,8 @@ def test_build_system_prompt_reads_gepa_prompt_file(tmp_path: Path) -> None:
     prompt_file.write_text("custom evolved prompt", encoding="utf-8")
 
     assert build_system_prompt("gepa", prompt_file=prompt_file) == "custom evolved prompt"
+
+
+def test_gepa_prompt_missing_raises_helpful_error(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="run_gepa"):
+        build_system_prompt("gepa", prompt_file=str(tmp_path / "absent.txt"))
