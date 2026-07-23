@@ -69,7 +69,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["from_organizators"]
+extend-exclude = ["from_organizators", "notebooks"]
 
 [tool.mypy]
 python_version = "3.11"
