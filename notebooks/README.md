@@ -148,6 +148,14 @@ checkpoint directory directly from the platform file manager.
 
 ## Yandex DataSphere — extra setup (real full FT on A100 80GB)
 
+**Shortcut:** if you only run on DataSphere, use the dedicated one-pass build
+[`qwen7b_full_finetune_datasphere.ipynb`](qwen7b_full_finetune_datasphere.ipynb)
+— it bakes in every fix below (driver-matched torch, numpy pin, storage paths,
+transformers-5 API, 8-bit AdamW). Edit the config block in its first cell
+(`BASE`, `MODE`, `USE_REAL_DATA`/`REAL_DATA_PATH`, `PUSH_TO_HUB`/`HUB_MODEL_ID`/
+`HF_TOKEN`) and **Run All** on a `g2.1` (A100 80 GB) config. The section below
+explains the same fixes for the general notebook.
+
 DataSphere's `DS Default` image is older than the 2026 training stack and its
 project disk is tiny (~10 GB), so a run there needs three DataSphere-specific
 steps that Colab/Kaggle don't. This recipe is battle-tested for the `g2.1`
