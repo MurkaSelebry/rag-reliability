@@ -18,6 +18,17 @@ from rag_reliability.methods.m6.predict import prediction_from_features
 from rag_reliability.schema import RagSample
 
 
+def make_sample(sample_id: str) -> RagSample:
+    return RagSample(
+        id=sample_id,
+        question="q",
+        context="c",
+        answer="a",
+        faithfulness=1,
+        relevance=1,
+    )
+
+
 class StubNLI:
     def __init__(self, table):
         self.table = table
@@ -94,6 +105,36 @@ def test_prediction_from_features_thresholds() -> None:
     assert prediction.faithfulness_pred == 1
     assert prediction.relevance_pred == 1
     assert prediction.invalid_output is False
+
+
+def test_prediction_emits_probabilities() -> None:
+    sample = make_sample("x")
+    features = {"selfcheck_contra_mean": 0.3, "semantic_entropy": 0.2, "cos_q_a": 0.8}
+
+    pred = prediction_from_features(sample, features)
+
+    assert pred.faithfulness_prob == pytest.approx(0.7)
+    assert pred.relevance_prob == pytest.approx(0.8)
+    assert pred.prob_method == "m6_features"
+
+
+def test_probabilities_clipped_to_unit_interval() -> None:
+    sample = make_sample("x")
+    features = {"selfcheck_contra_mean": 1.4, "semantic_entropy": 0.0, "cos_q_a": -0.2}
+
+    pred = prediction_from_features(sample, features)
+
+    assert pred.faithfulness_prob == 0.0
+    assert pred.relevance_prob == 0.0
+
+
+def test_binary_fields_unchanged_by_prob_addition() -> None:
+    sample = make_sample("x")
+    features = {"selfcheck_contra_mean": 0.3, "semantic_entropy": 0.2, "cos_q_a": 0.8}
+
+    pred = prediction_from_features(sample, features)
+
+    assert pred.faithfulness_pred == 1 and pred.relevance_pred == 1
 
 
 def test_load_sample_cache_reads_cached_generation(tmp_path) -> None:

@@ -43,12 +43,17 @@ def prediction_from_features(
     cosine = float(features.get("cos_q_a", 1.0))
     faithfulness = int(contradiction <= contradiction_threshold and entropy <= entropy_threshold)
     relevance = int(cosine >= relevance_threshold)
+    p_faith = max(0.0, min(1.0, 1.0 - contradiction))
+    p_rel = max(0.0, min(1.0, cosine))
     return Prediction(
         id=sample.id,
         faithfulness_pred=faithfulness,
         relevance_pred=relevance,
         raw_output=json.dumps(features, ensure_ascii=False),
         invalid_output=False,
+        faithfulness_prob=p_faith,
+        relevance_prob=p_rel,
+        prob_method="m6_features",
     )
 
 
