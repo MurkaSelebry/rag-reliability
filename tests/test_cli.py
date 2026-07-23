@@ -84,3 +84,45 @@ def test_eval_forwards_threshold_options(monkeypatch, tmp_path) -> None:
             True,
         )
     ]
+
+
+def test_eval_rejects_val_data_without_val_predictions(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(cli.subprocess, "run", lambda *_args, **_kwargs: None)
+    result = runner.invoke(
+        app,
+        [
+            "eval",
+            "--data",
+            str(tmp_path / "test.jsonl"),
+            "--predictions",
+            str(tmp_path / "test_predictions.jsonl"),
+            "--output",
+            str(tmp_path / "report.json"),
+            "--val-data",
+            str(tmp_path / "val.jsonl"),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--val-data and --val-predictions must be given together" in result.output
+
+
+def test_eval_rejects_val_predictions_without_val_data(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(cli.subprocess, "run", lambda *_args, **_kwargs: None)
+    result = runner.invoke(
+        app,
+        [
+            "eval",
+            "--data",
+            str(tmp_path / "test.jsonl"),
+            "--predictions",
+            str(tmp_path / "test_predictions.jsonl"),
+            "--output",
+            str(tmp_path / "report.json"),
+            "--val-predictions",
+            str(tmp_path / "val_predictions.jsonl"),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--val-data and --val-predictions must be given together" in result.output

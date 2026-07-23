@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from rag_reliability.metrics import evaluate_predictions
 from rag_reliability.schema import Prediction, RagSample
 
@@ -25,7 +27,9 @@ def test_apply_limit_keeps_first_n_samples() -> None:
     assert evaluate_script.apply_limit([1, 2, 3], 2) == [1, 2]
 
 
-def _write_split(tmp_path: Path, name: str) -> tuple[Path, Path]:
+def _write_split(
+    tmp_path: Path, name: str, reliable_prob: float = 0.9, unreliable_prob: float = 0.1
+) -> tuple[Path, Path]:
     samples = [
         {
             "id": f"{name}-reliable",
@@ -65,29 +69,29 @@ def _write_split(tmp_path: Path, name: str) -> tuple[Path, Path]:
             "id": f"{name}-reliable",
             "faithfulness_pred": 0,
             "relevance_pred": 0,
-            "faithfulness_prob": 0.9,
-            "relevance_prob": 0.9,
+            "faithfulness_prob": reliable_prob,
+            "relevance_prob": reliable_prob,
         },
         {
             "id": f"{name}-unfaithful",
             "faithfulness_pred": 0,
             "relevance_pred": 0,
-            "faithfulness_prob": 0.1,
-            "relevance_prob": 0.9,
+            "faithfulness_prob": unreliable_prob,
+            "relevance_prob": reliable_prob,
         },
         {
             "id": f"{name}-irrelevant",
             "faithfulness_pred": 0,
             "relevance_pred": 0,
-            "faithfulness_prob": 0.9,
-            "relevance_prob": 0.1,
+            "faithfulness_prob": reliable_prob,
+            "relevance_prob": unreliable_prob,
         },
         {
             "id": f"{name}-unreliable",
             "faithfulness_pred": 0,
             "relevance_pred": 0,
-            "faithfulness_prob": 0.1,
-            "relevance_prob": 0.1,
+            "faithfulness_prob": unreliable_prob,
+            "relevance_prob": unreliable_prob,
         },
     ]
     data_path = tmp_path / f"{name}_data.jsonl"
@@ -110,8 +114,10 @@ def _run_evaluate(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_threshold_mode_report_structure(tmp_path: Path) -> None:
-    val_data, val_predictions = _write_split(tmp_path, "val")
-    test_data, test_predictions = _write_split(tmp_path, "test")
+    val_data, val_predictions = _write_split(tmp_path, "val", reliable_prob=0.5, unreliable_prob=0.49)
+    test_data, test_predictions = _write_split(
+        tmp_path, "test", reliable_prob=0.2, unreliable_prob=0.19
+    )
     output = tmp_path / "report.json"
 
     result = _run_evaluate(
@@ -138,6 +144,9 @@ def test_threshold_mode_report_structure(tmp_path: Path) -> None:
     }
     assert "reliable_f1_macro" in payload["tuned"]
     assert "reliable_f1_macro" in payload["binary_default"]
+    assert payload["thresholds"]["t_faith"] == 0.5
+    assert payload["thresholds"]["t_rel"] == 0.5
+    assert payload["tuned"]["reliable_f1_macro"] == pytest.approx(3 / 7)
 
 
 def test_threshold_mode_requires_both_val_args(tmp_path: Path) -> None:

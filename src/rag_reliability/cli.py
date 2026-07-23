@@ -81,6 +81,8 @@ def eval(  # noqa: A001 - CLI verb
     val_predictions: Path | None = typer.Option(None, help="Val predictions with probs."),
     grid_step: float = typer.Option(0.01, help="Threshold grid step."),
 ) -> None:
+    if (val_data is None) != (val_predictions is None):
+        raise typer.BadParameter("--val-data and --val-predictions must be given together")
     command = [
         sys.executable, "scripts/evaluate.py",
         "--data", str(data), "--predictions", str(predictions), "--output", str(output),
