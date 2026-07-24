@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import random
 import string
@@ -379,3 +380,68 @@ def test_check_folds_rejects_a_dropped_case(tmp_path: Path) -> None:
 
     assert not report["passed"]
     assert any("assignment covers" in error for error in report["errors"])
+
+
+# --------------------------------------------------------------------------- #
+# CLI
+# --------------------------------------------------------------------------- #
+
+_SPEC = importlib.util.spec_from_file_location(
+    "prepare_splits", Path(__file__).parents[1] / "scripts" / "prepare_splits.py"
+)
+assert _SPEC is not None and _SPEC.loader is not None
+prepare_splits = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(prepare_splits)
+
+
+def _cli_args(corpus: Path, folds: Path) -> list[str]:
+    return [
+        "--data",
+        str(corpus),
+        "--output",
+        str(folds),
+        "--near-dup-threshold",
+        str(NO_NEAR_DUP),
+    ]
+
+
+def test_cli_generates_a_valid_artifact_and_is_reproducible(tmp_path: Path) -> None:
+    samples = make_corpus(300, seed=22, group_size=2)
+    corpus = tmp_path / "corpus.jsonl"
+    save_jsonl(samples, corpus)
+    folds = tmp_path / "splits" / "folds.json"
+
+    assert prepare_splits.main(_cli_args(corpus, folds)) == 0
+    first = folds.read_bytes()
+    assert prepare_splits.main(_cli_args(corpus, folds)) == 0
+
+    assert folds.read_bytes() == first
+
+
+def test_cli_check_returns_zero_on_a_good_artifact(tmp_path: Path) -> None:
+    samples = make_corpus(300, seed=23, group_size=2)
+    corpus = tmp_path / "corpus.jsonl"
+    save_jsonl(samples, corpus)
+    folds = tmp_path / "folds.json"
+    prepare_splits.main(_cli_args(corpus, folds))
+
+    assert prepare_splits.main(["--check", "--folds", str(folds), "--data", str(corpus)]) == 0
+
+
+def test_cli_check_returns_one_on_a_tampered_artifact(tmp_path: Path) -> None:
+    samples = make_corpus(300, seed=24, group_size=2)
+    corpus = tmp_path / "corpus.jsonl"
+    save_jsonl(samples, corpus)
+    folds = tmp_path / "folds.json"
+    prepare_splits.main(_cli_args(corpus, folds))
+    payload = json.loads(folds.read_text(encoding="utf-8"))
+    groups = build_groups(samples, near_dup_threshold=NO_NEAR_DUP)
+    victim = next(
+        sample_id
+        for sample_id in payload["assignment"]
+        if sum(1 for other in groups.values() if other == groups[sample_id]) > 1
+    )
+    payload["assignment"][victim][0] = (payload["assignment"][victim][0] + 1) % 5
+    folds.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    assert prepare_splits.main(["--check", "--folds", str(folds), "--data", str(corpus)]) == 1
