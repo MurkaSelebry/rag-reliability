@@ -74,11 +74,12 @@ cp -r ../handoff/* docs/handoff/
 cp ../handoff/AGENTS.md ../handoff/CLAUDE.md ../handoff/codex-setup.sh .
 git add -A && git commit -m "docs: спецификации и handoff" && git push -u origin integration
 
-bash docs/handoff/setup_worktrees.sh 1
-git push -u origin task/A2-stats task/A3-schema task/A4-logprobs task/A5-hygiene
+bash docs/handoff/setup_worktrees.sh 1 --push
 ```
 
-Последняя строка обязательна: Codex Cloud работает с удалённым репозиторием.
+Флаг `--push` обязателен: Codex Cloud работает с удалённым репозиторием, ветки
+`task/A2-stats`, `task/A3-schema`, `task/A4-logprobs`, `task/A5-hygiene` должны быть на origin.
+Скрипт совместим с bash 3.2 (штатный `/bin/bash` в macOS).
 В настройках окружения Codex указать `codex-setup.sh` как setup script.
 
 ---
