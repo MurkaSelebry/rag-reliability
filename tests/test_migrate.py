@@ -89,6 +89,15 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     _write_predictions(run_dir / "train.jsonl", _legacy_rows(0, 1))
     _write_predictions(run_dir / "val.jsonl", _legacy_rows(1, 1))
     _write_predictions(run_dir / "test.jsonl", _legacy_rows(2, 1))
+    existing_metadata = {
+        "config": {"m6": {"n_samples": 5}},
+        "git_hash": "abc123",
+        "seed": 42,
+    }
+    (run_dir / "run.yaml").write_text(
+        yaml.safe_dump(existing_metadata, sort_keys=False),
+        encoding="utf-8",
+    )
 
     migrate_predictions(root)
     first_scores = (run_dir / "scores.jsonl").read_bytes()
@@ -98,6 +107,10 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
     assert (run_dir / "scores.jsonl").read_bytes() == first_scores
     assert (run_dir / "run.yaml").read_bytes() == first_meta
     assert len(_read_jsonl(run_dir / "scores.jsonl")) == 3
+    migrated_metadata = yaml.safe_load(first_meta)
+    assert {
+        key: migrated_metadata[key] for key in existing_metadata
+    } == existing_metadata
 
 
 def test_partial_migration_records_actual_count(tmp_path: Path) -> None:
@@ -145,8 +158,10 @@ def test_dry_run_reads_every_existing_prediction_file_without_writing(
         for path in root.rglob("*.jsonl")
         if path.name in {"train.jsonl", "val.jsonl", "test.jsonl"}
     )
-    score_files_before = {
-        path: path.read_bytes() for path in root.rglob("scores.jsonl")
+    tree_before = {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
     }
 
     exit_code = main(["--root", str(root), "--dry-run"])
@@ -159,6 +174,8 @@ def test_dry_run_reads_every_existing_prediction_file_without_writing(
     assert "path" in output
     assert "prefix" in output
     assert "partial?" in output
-    assert {path: path.read_bytes() for path in root.rglob("scores.jsonl")} == (
-        score_files_before
-    )
+    assert {
+        path.relative_to(root): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    } == tree_before
