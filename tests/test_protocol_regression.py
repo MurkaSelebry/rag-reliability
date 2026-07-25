@@ -8,6 +8,13 @@
 Здесь же проверяется канонизация корпуса: id из ``data/alfa.jsonl`` обязаны
 покрывать все 446 строк исторических сплитов. Реконструкция id с ``strip()``
 даёт 422 из 446 и все десять чисел ломает.
+
+Вход теста — ``scores_legacy.jsonl``, а не ``scores.jsonl``. Это разные вещи,
+которые до слияния волны 2 делили один путь: ``scores.jsonl`` — текущий
+корпус-wide артефакт метода, его перезаписывает каждый новый прогон;
+``scores_legacy.jsonl`` — замороженная миграция A3 на 446 исторических кейсах,
+единственный вход, на котором старые числа вообще воспроизводимы. B3 записала
+OOF-прогон в ``scores.jsonl`` и тем самым снесла регресс — отсюда разделение.
 """
 
 from __future__ import annotations
@@ -22,6 +29,10 @@ import pytest
 
 REPO = Path(__file__).parents[1]
 CORPUS = REPO / "data" / "alfa.jsonl"
+
+#: Замороженный вход регресса. Отдельно от ``scores.jsonl``, который перезаписывает
+#: любой корпус-wide прогон метода (B3 для surface/majority, C2/C3/C4 в волне 3).
+LEGACY_SCORES = "scores_legacy.jsonl"
 
 
 def _load_cli():
@@ -64,7 +75,7 @@ def _run_legacy(run: PublishedRun, tmp_path: Path) -> dict:
         cli.main(
             [
                 "--data", str(CORPUS),
-                "--scores", str(run.directory / "scores.jsonl"),
+                "--scores", str(run.directory / LEGACY_SCORES),
                 "--legacy-holdout",
                 "--legacy-val", str(run.directory / "val.jsonl"),
                 "--legacy-test", str(run.directory / "test.jsonl"),
@@ -124,6 +135,35 @@ def test_all_ten_published_numbers_are_covered() -> None:
     assert len({value for _, _, value in numbers}) == 10
 
 
+@pytest.mark.parametrize("run", PUBLISHED, ids=lambda run: run.name)
+def test_legacy_scores_stay_frozen_on_historical_ids(run: PublishedRun) -> None:
+    """Регресс-вход не должен подменяться корпус-wide прогоном.
+
+    Ровно это и произошло при слиянии волны 2: OOF-прогон surface/majority лёг в
+    ``scores.jsonl`` с id другого корпуса (``organizer_*``), и десять чисел стали
+    невоспроизводимы. Проверка ловит подмену на входе, а не по итоговой метрике.
+    """
+    rows = [
+        json.loads(line)
+        for line in (run.directory / LEGACY_SCORES).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(rows) == 446, f"{run.name}: legacy-вход должен покрывать оба исторических сплита"
+
+    ids = {row["id"] for row in rows}
+    assert len(ids) == 446
+    assert all(sample_id.startswith("alfa_") for sample_id in ids), (
+        f"{run.name}: id не из канонического корпуса — вероятно, файл перезаписан прогоном"
+    )
+
+    split_ids = {
+        sample_id
+        for split in ("val", "test")
+        for sample_id in cli.read_ids(run.directory / f"{split}.jsonl")
+    }
+    assert split_ids <= ids, f"{run.name}: {len(split_ids - ids)} исторических id без скоров"
+
+
 def test_canonical_corpus_covers_every_historical_split_id() -> None:
     """Канонический корпус обязан покрывать исторические сплиты целиком."""
     corpus_ids = {json.loads(line)["id"] for line in CORPUS.read_text(encoding="utf-8").splitlines()}
@@ -145,7 +185,7 @@ def test_legacy_holdout_requires_both_split_files(tmp_path: Path) -> None:
         cli.parse_args(
             [
                 "--data", str(CORPUS),
-                "--scores", str(PUBLISHED[0].directory / "scores.jsonl"),
+                "--scores", str(PUBLISHED[0].directory / LEGACY_SCORES),
                 "--legacy-holdout",
                 "--legacy-val", str(PUBLISHED[0].directory / "val.jsonl"),
                 "--output", str(tmp_path / "out.json"),

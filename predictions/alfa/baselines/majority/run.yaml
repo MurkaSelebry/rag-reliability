@@ -10,35 +10,34 @@ method:
   corpus_wide: true
 variant: majority
 config:
-  data: data/organizers.jsonl
-  folds: data/splits/folds.json
+  data: data/alfa.jsonl
+  folds: data/splits/folds_alfa.json
   limit: None
   output: predictions/alfa/baselines/majority/scores.jsonl
   run_yaml: None
   seed: '0'
   variant: majority
 git:
-  hash: a67eb17
+  hash: f1c5ace
   dirty: true
   changed:
   - predictions/alfa/baselines/majority/scores.jsonl
   - predictions/alfa/baselines/surface/run.yaml
   - predictions/alfa/baselines/surface/scores.jsonl
-  - src/rag_reliability/methods/registry.py
-  - scripts/run_surface_baseline.py
-  - src/rag_reliability/methods/surface/__init__.py
-  - src/rag_reliability/methods/surface/features.py
-  - src/rag_reliability/methods/surface/oof.py
-  - tests/test_surface_features.py
-  - tests/test_surface_oof.py
+  - tests/test_protocol_regression.py
+  - predictions/alfa/baselines/majority/scores_legacy.jsonl
+  - predictions/alfa/baselines/surface/scores_legacy.jsonl
+  - predictions/alfa/baselines/surface_e5/scores_legacy.jsonl
+  - predictions/alfa/m3/few_shot/scores_legacy.jsonl
+  - predictions/alfa/m3/zero_shot/scores_legacy.jsonl
 seed: 0
-n: 1486
+n: 1480
 partial: true
-timestamp: '2026-07-25T22:41:19+00:00'
+timestamp: '2026-07-25T23:16:24+00:00'
 coverage:
-  corpus_n: 2245
-  scored_n: 1486
-  excluded_n: 759
+  corpus_n: 2233
+  scored_n: 1480
+  excluded_n: 753
   reason: cases outside data/splits/folds.json (oversized groups) cannot be scored
     OOF
-  corpus_sha256: fcb5c732144b04ebb9fb3802992cc771587f020f3ded3a16ae2f349f610ae345
+  corpus_sha256: c386cd4e342463381ec74d4b6dd3539a22ea9eaae769fd1b2c910d4ca12f95b5
