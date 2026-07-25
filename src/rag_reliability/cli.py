@@ -118,7 +118,12 @@ def list_methods() -> None:
     for spec in registry.METHODS.values():
         requires = ", ".join(spec.requires) if spec.requires else "-"
         demo = "demo" if spec.demo_runner else "batch-only"
-        typer.echo(f"{spec.name:16} {spec.family:14} {demo:10} requires: {requires}")
+        scope = "corpus-wide" if spec.corpus_wide else "split-only"
+        scores = ", ".join(spec.score_keys) if spec.score_keys else "-"
+        typer.echo(
+            f"{spec.name:16} {spec.family:14} {demo:10} {scope:12} "
+            f"scores: {scores:44} requires: {requires}"
+        )
 
 
 if __name__ == "__main__":
