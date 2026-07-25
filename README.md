@@ -200,15 +200,14 @@ a per-sample data-flow diagram.
 
 ## Results
 
-On the organizer dataset (2245 rows, ~72% reliable), reliability macro-F1 —
-numbers traceable to [docs/experiments.md](docs/experiments.md):
-
-| Method | Reliability macro-F1 | Notes |
-|---|---:|---|
-| Trivial floor (`always_reliable`) | 0.4194 | majority-class baseline |
-| Qwen zero-shot, direct (Method 1) | 0.4946 | 0% invalid output |
-| **RuModernBERT encoder (best)** | **0.5879** | 512 tok, 3 epochs, lr 2e-5, no weighting, tuned threshold 0.72 |
-| Methods 3/6 organizer threshold-fitted evaluation | pending Track B | aldem `split_samples` (seed 42); do not compare with skol grouped splits (seed 2233) |
+The organizer corpus now has 2233 canonical unique cases. The former headline
+comparison is withdrawn: `0.4194` (trivial floor) and `0.4946` (Qwen
+zero-shot) were in-sample measurements on the non-canonical converted rows,
+while `0.5879` (RuModernBERT) came from a separate held-out protocol. Mixing
+them in one ranking overstated comparability. All methods will be recalculated
+on the canonical group-aware split; see
+[the Phase 0 measurement specification](docs/specs/10_PHASE0_измерительный_контур.md)
+and the forthcoming CV reports linked from [docs/experiments.md](docs/experiments.md).
 
 On the 36-sample dummy set, zero-shot direct reaches `reliable_f1 = 0.86`
 (toy scale — see the experiments doc for caveats).
