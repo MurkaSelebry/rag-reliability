@@ -49,3 +49,5 @@ profile: cloud
 split: all
 limit: 20
 method: m6
+partial: true
+n: 60

@@ -69,3 +69,5 @@ limit: null
 method: m3
 variant: gepa_plain_s1
 prompt_file: artifacts/cloud/m3_prompt_plain_seed1.txt
+partial: true
+n: 60

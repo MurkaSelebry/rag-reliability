@@ -63,3 +63,5 @@ limit: null
 method: m3
 variant: few_shot_72b
 prompt_file: null
+partial: true
+n: 223

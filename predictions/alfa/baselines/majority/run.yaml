@@ -42,3 +42,5 @@ profile: local
 split: test
 method: baseline
 variant: majority
+partial: true
+n: 446

@@ -42,3 +42,5 @@ profile: local
 split: test
 method: baseline
 variant: surface_e5
+partial: true
+n: 446

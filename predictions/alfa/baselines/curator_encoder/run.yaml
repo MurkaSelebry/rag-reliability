@@ -49,3 +49,5 @@ max_length: 512
 epochs: 1
 batch_size: 8
 seed: 42
+partial: true
+n: 120

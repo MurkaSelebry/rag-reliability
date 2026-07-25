@@ -69,3 +69,5 @@ limit: null
 method: m3
 variant: gepa_markers_s1
 prompt_file: artifacts/cloud/m3_prompt_markers_seed1.txt
+partial: true
+n: 60

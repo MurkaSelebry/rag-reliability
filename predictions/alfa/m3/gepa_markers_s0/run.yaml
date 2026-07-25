@@ -70,3 +70,5 @@ limit: null
 method: m3
 variant: gepa_markers_s0
 prompt_file: artifacts/alfa_or/m3_prompt_markers_seed0.txt
+partial: true
+n: 223
