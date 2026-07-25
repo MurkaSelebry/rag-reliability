@@ -8,7 +8,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from rag_reliability.evaluation.protocol import evaluate_cv
+from rag_reliability.schema import Prediction, RagSample
 from rag_reliability.stacking.collect import collect_features
+from rag_reliability.stacking.stack import (
+    FEATURE_SET_V1,
+    fit_stack,
+    make_prediction_fit_fn,
+    select_features_by_ci,
+)
 
 
 def _write_scores(path: Path, rows: list[dict[str, object]]) -> None:
@@ -109,3 +117,94 @@ def test_collect_features_rejects_duplicate_ids(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Duplicate id 'a'"):
         collect_features({"surf": surface}, ["a"], ["surf.p_faith"])
+
+
+def test_fit_stack_auto_chooses_platt_below_500_and_isotonic_from_500() -> None:
+    rng = np.random.default_rng(7)
+    small_x = rng.normal(size=(60, 3))
+    small_y = np.tile([0, 1], 30)
+    large_x = rng.normal(size=(500, 3))
+    large_y = np.tile([0, 1], 250)
+
+    small = fit_stack(small_x, small_y, model="logreg", calibrate="auto", seed=4)
+    large = fit_stack(large_x, large_y, model="logreg", calibrate="auto", seed=4)
+
+    assert small.calibration_method == "sigmoid"
+    assert large.calibration_method == "isotonic"
+    assert small.predict_proba(small_x).shape == (60, 2)
+    assert large.predict_proba(large_x).shape == (500, 2)
+
+
+def test_prediction_fit_fn_receives_only_training_fold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import rag_reliability.stacking.stack as stack_module
+
+    seen_fit_rows: list[set[int]] = []
+
+    class _RecordingModel:
+        def predict_proba(self, matrix: np.ndarray) -> np.ndarray:
+            positive = np.full(len(matrix), 0.6)
+            return np.column_stack([1.0 - positive, positive])
+
+    def recording_fit(
+        matrix: np.ndarray,
+        labels: np.ndarray,
+        *,
+        model: str,
+        calibrate: str,
+        seed: int,
+    ) -> _RecordingModel:
+        del labels, model, calibrate, seed
+        seen_fit_rows.append(set(matrix[:, 0].astype(int).tolist()))
+        return _RecordingModel()
+
+    monkeypatch.setattr(stack_module, "fit_stack", recording_fit)
+    samples = [
+        RagSample(
+            id=f"s{index}",
+            question="q",
+            context="c",
+            answer="a",
+            faithfulness=index % 2,
+            relevance=1,
+        )
+        for index in range(6)
+    ]
+    predictions = [
+        Prediction(
+            id=f"s{index}",
+            faithfulness_pred=0,
+            relevance_pred=0,
+            scores={"surf.row": float(index)},
+        )
+        for index in range(6)
+    ]
+    folds = {
+        "config": {"n_folds": 2, "n_repeats": 1},
+        "assignment": {f"s{index}": [index % 2] for index in range(6)},
+    }
+
+    evaluate_cv(
+        samples,
+        predictions,
+        folds,
+        score_fn=lambda prediction: 0.5,
+        fit_fn=make_prediction_fit_fn(["surf.row"]),
+    )
+
+    assert seen_fit_rows == [{1, 3, 5}, {0, 2, 4}]
+
+
+def test_select_features_by_ci_uses_strictly_positive_lower_bound() -> None:
+    selected = select_features_by_ci(
+        ["surf.p_faith", "surf.p_rel"],
+        {
+            "m3.p_faith": (0.002, 0.051),
+            "m3.p_rel": (-0.008, 0.013),
+            "enc.logit": (0.0, 0.040),
+        },
+    )
+
+    assert selected == ["surf.p_faith", "surf.p_rel", "m3.p_faith"]
+    assert "m3.p_rel" not in FEATURE_SET_V1
