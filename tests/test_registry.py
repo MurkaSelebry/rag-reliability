@@ -20,8 +20,8 @@ def _ctx(tmp_path: Path) -> registry.CommandContext:
     )
 
 
-def test_registry_has_fifteen_methods() -> None:
-    assert len(registry.METHODS) == 15
+def test_registry_has_seventeen_methods() -> None:
+    assert len(registry.METHODS) == 17
     assert set(registry.all_method_names()) == set(registry.METHODS)
 
 
@@ -156,12 +156,26 @@ def test_default_score_expr_uses_only_declared_keys() -> None:
         assert not unknown, f"{spec.name}: default_score_expr references undeclared {unknown}"
 
 
-def test_every_corpus_wide_method_has_a_scorer() -> None:
+def test_every_corpus_wide_method_can_actually_be_run() -> None:
+    """Заявленный corpus_wide обязан иметь исполнителя: покейсовый скорер или свой скрипт.
+
+    OOF-методы (surface, majority) видят фолд целиком и в модель score.py
+    «один кейс -> Prediction» не укладываются — им положен corpus_runner.
+    """
     for spec in registry.METHODS.values():
-        assert (spec.build_scorer is not None) == spec.corpus_wide, (
-            f"{spec.name}: corpus_wide={spec.corpus_wide} but "
-            f"build_scorer={'set' if spec.build_scorer else 'None'}"
+        runnable = spec.build_scorer is not None or spec.corpus_runner is not None
+        assert runnable == spec.corpus_wide, (
+            f"{spec.name}: corpus_wide={spec.corpus_wide}, "
+            f"build_scorer={'set' if spec.build_scorer else 'None'}, "
+            f"corpus_runner={spec.corpus_runner}"
         )
+
+
+def test_oof_methods_are_not_offered_as_per_case_scorers(tmp_path: Path) -> None:
+    """score.py должен отказывать внятно, а не считать OOF по одному кейсу."""
+    for name in ("surface", "majority"):
+        with pytest.raises(ValueError, match="run_surface_baseline"):
+            registry.build_scorer(name, _ctx(tmp_path))
 
 
 def test_build_scorer_refuses_parked_methods_with_wave_three_pointer(tmp_path: Path) -> None:
