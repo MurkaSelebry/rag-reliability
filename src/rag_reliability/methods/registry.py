@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rag_reliability.methods.surface.features import FEATURE_KEYS
+
 if TYPE_CHECKING:
     from rag_reliability.schema import Prediction, RagSample
 
@@ -76,6 +78,7 @@ class CommandContext:
     m6_contradiction_threshold: float = 0.5
     m6_entropy_threshold: float = 1.0
     m6_relevance_threshold: float = 0.25
+    folds_path: str = "data/splits/folds.json"
     independent_faithfulness_threshold: float = 0.20
     independent_relevance_threshold: float = 0.10
     limit: int | None = None
@@ -99,6 +102,10 @@ class MethodSpec:
     default_score_expr: str | None = None
     corpus_wide: bool = True
     build_scorer: ScorerFactory | None = None
+    # Скрипт, производящий корпус-wide скоры целиком, когда покейсового скорера
+    # быть не может: OOF-методы (surface, majority) обязаны видеть весь фолд
+    # сразу, поэтому в модель score.py «один кейс -> Prediction» не укладываются.
+    corpus_runner: str | None = None
 
 
 def _maybe_limit(command: list[str], ctx: CommandContext) -> list[str]:
@@ -303,6 +310,27 @@ def _m6(ctx: CommandContext) -> list[str]:
     if ctx.m6_backend == "openai":
         command.extend(["--model", ctx.model, "--api-base", ctx.m6_api_base])
     return _maybe_limit(command, ctx)
+
+
+def _surface(variant: str) -> BuildCommand:
+    def build(ctx: CommandContext) -> list[str]:
+        return _maybe_limit(
+            [
+                ctx.python,
+                SURFACE_RUNNER,
+                "--variant",
+                variant,
+                "--data",
+                str(ctx.data),
+                "--folds",
+                ctx.folds_path,
+                "--output",
+                str(ctx.predictions_path),
+            ],
+            ctx,
+        )
+
+    return build
 
 
 def _independent(ctx: CommandContext) -> list[str]:
@@ -588,6 +616,11 @@ def _independent_scorer(ctx: CommandContext) -> Scorer:
     return score
 
 
+SURFACE_RUNNER = "scripts/run_surface_baseline.py"
+_SURF_FEATURE_KEYS = tuple(f"surf.{key}" for key in FEATURE_KEYS)
+_SURF_SCORE_KEYS = (*_SURF_FEATURE_KEYS, "surf.p_faith", "surf.p_rel")
+_SURF_SCORE_EXPR = "surf.p_faith * surf.p_rel"
+
 _M3_SCORE_KEYS = ("m3.p_faith", "m3.p_rel")
 _M3_SCORE_EXPR = "m3.p_faith * m3.p_rel"
 _PROMPT_SCORE_KEYS = ("prompt.p_faith", "prompt.p_rel")
@@ -685,6 +718,18 @@ METHODS: dict[str, MethodSpec] = {
         default_score_expr="(1 - m6.contra_mean) * m6.cos_q_a",
         corpus_wide=False,
     ),
+    "surface": MethodSpec(
+        "surface", "Surface features + OOF logreg", "surface", None, _surface("surface"),
+        None, ("data/splits/folds.json",),
+        score_keys=_SURF_SCORE_KEYS, default_score_expr=_SURF_SCORE_EXPR,
+        corpus_runner=SURFACE_RUNNER,
+    ),
+    "majority": MethodSpec(
+        "majority", "Majority base rate (OOF)", "surface", None, _surface("majority"),
+        None, ("data/splits/folds.json",),
+        score_keys=("surf.p_faith", "surf.p_rel"),
+        corpus_runner=SURFACE_RUNNER,
+    ),
     "independent": MethodSpec(
         "independent", "Independent rule-based evaluator", "independent", None, _independent,
         "independent",
@@ -755,6 +800,11 @@ def build_scorer(name: str, ctx: CommandContext) -> Scorer:
     """
     spec = get(name)
     if spec.build_scorer is None:
+        if spec.corpus_runner is not None:
+            raise ValueError(
+                f"Method {name!r} scores out-of-fold and cannot be run case by case; "
+                f"use {spec.corpus_runner}"
+            )
         reason = WAVE3_OWNER.get(name, "see docs/handoff/HANDOFF.md §5")
         raise ValueError(
             f"Method {name!r} has no corpus-wide scorer "

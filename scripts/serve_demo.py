@@ -148,6 +148,16 @@ def method_statuses(
             "artifact": None,
             "reason": "batch-only: requires precomputed Method 6 feature JSONL",
         },
+        "surface": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: out-of-fold scoring needs the whole corpus and folds.json",
+        },
+        "majority": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: out-of-fold scoring needs the whole corpus and folds.json",
+        },
         "independent": {"available": True, "artifact": None},
     }
 
