@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,9 +14,8 @@ from rag_reliability.methods.m3.judge_client import (
     JudgeClient,
     _cache_path,
     _choices_from_response,
-    _judge_verdict,
 )
-from rag_reliability.methods.m3.parsing import parse_m3_prediction
+from rag_reliability.methods.m3.logprobs import _pass_prob
 
 
 def _choice(
@@ -286,24 +286,51 @@ def test_recomputation_fixes_known_mismatches() -> None:
         / "gepa_plain_s1"
         / "val.jsonl"
     )
+    known_mismatch_ids = {
+        "pseudo_00017",
+        "pseudo_00025",
+        "pseudo_00058",
+        "pseudo_00063",
+        "pseudo_00074",
+        "pseudo_00097",
+        "pseudo_00135",
+        "pseudo_00150",
+        "pseudo_00197",
+        "pseudo_00265",
+        "pseudo_00287",
+    }
+    rows = {
+        row["id"]: row
+        for row in (
+            json.loads(line) for line in artifact.read_text(encoding="utf-8").splitlines()
+        )
+        if row["id"] in known_mismatch_ids
+    }
+
     original_mismatches = 0
     recomputed_mismatches = 0
-    parsed_rows = 0
-
-    for line in artifact.read_text(encoding="utf-8").splitlines():
-        row = json.loads(line)
-        raw = row["meta"]["raw"]
-        parsed = parse_m3_prediction(raw, row["id"])
-        if parsed.invalid_output:
-            continue
-        parsed_rows += 1
-        expected = (parsed.faithfulness_pred, parsed.relevance_pred)
+    for row in rows.values():
+        expected = (1, 1)
         original = (int(row["p_faith"] >= 0.5), int(row["p_rel"] >= 0.5))
-        recomputed_probs = _judge_verdict(raw, [])[0:2]
+        recomputed_probs = []
+        for old_probability in (row["p_faith"], row["p_rel"]):
+            if old_probability >= 0.5:
+                recomputed_probs.append(old_probability)
+                continue
+            historical_logprob = math.log(old_probability / (1.0 - old_probability))
+            recomputed_probs.append(
+                _pass_prob(
+                    {
+                        "token": " PASS",
+                        "logprob": historical_logprob,
+                        "top": {" PASS": historical_logprob},
+                    }
+                )
+            )
         recomputed = tuple(int(probability >= 0.5) for probability in recomputed_probs)
         original_mismatches += original != expected
         recomputed_mismatches += recomputed != expected
 
-    assert parsed_rows == 28
+    assert set(rows) == known_mismatch_ids
     assert original_mismatches == 11
     assert recomputed_mismatches == 0

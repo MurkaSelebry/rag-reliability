@@ -75,6 +75,16 @@ def test_one_side_visible_is_calibrated(probability: float) -> None:
     assert _pass_prob(token) == pytest.approx(probability, abs=1e-9)
 
 
+@pytest.mark.parametrize("fail_probability", [1e-6, 0.01, 0.1, 0.5, 0.9, 0.99, 1 - 1e-6])
+def test_fail_only_side_is_calibrated(fail_probability: float) -> None:
+    token = tok(
+        " FAIL",
+        logprob=math.log(fail_probability),
+        top={" FAIL": math.log(fail_probability)},
+    )
+    assert _pass_prob(token) == pytest.approx(1.0 - fail_probability, abs=1e-9)
+
+
 def test_one_side_visible_is_monotone_in_confidence() -> None:
     probabilities = [0.1, 0.5, 0.9, 0.99, 0.999]
     out = [
