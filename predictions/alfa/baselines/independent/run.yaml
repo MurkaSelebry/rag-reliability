@@ -1,5 +1,6 @@
 method:
   name: independent
+  version: contract-598eaa7e9226
   family: independent
   mode: null
   score_keys:
@@ -10,6 +11,7 @@ method:
 variant: rule_based
 config:
   data: data/organizers.jsonl
+  direct_adapter_path: results/adapters_direct
   flush_every: '20'
   independent_faithfulness_threshold: '0.2'
   independent_relevance_threshold: '0.1'
@@ -24,6 +26,7 @@ config:
   m3_max_context_chars: None
   m3_max_tokens: '400'
   m3_prompt_file: configs/m3_gepa_prompt.txt
+  marker_adapter_path: results/adapters_marker
   max_tokens: '64'
   method: independent
   model: mlx-community/Qwen2.5-1.5B-Instruct-4bit
@@ -33,11 +36,14 @@ config:
   seed: '0'
   variant: rule_based
 git:
-  hash: c20da2a
+  hash: 99e0f0b
   dirty: true
   changed:
-  - predictions/alfa/baselines/independent/scores.jsonl
+  - scripts/score.py
+  - src/rag_reliability/methods/registry.py
+  - tests/test_registry.py
+  - tests/test_score_cli.py
 seed: 0
 n: 2245
 partial: false
-timestamp: '2026-07-25T13:05:51+00:00'
+timestamp: '2026-07-25T21:28:50+00:00'

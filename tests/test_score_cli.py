@@ -214,6 +214,34 @@ def test_validate_rejects_non_finite_scores(tmp_path: Path) -> None:
         registry.validate_scores_file(path, spec)
 
 
+def test_validate_rejects_non_finite_undeclared_score(tmp_path: Path) -> None:
+    """Незаявленный ключ с NaN — тоже брак: он попадёт в стэкер наравне с остальными.
+
+    Контракт задаёт минимум содержимого строки, а не разрешение писать мусор мимо него.
+    """
+    spec = registry.get("independent")
+    path = tmp_path / "scores.jsonl"
+    path.write_text(
+        '{"id": "a", "scores": {"ind.faith_score": 0.4, "ind.rel_score": 0.2, '
+        '"ind.extra": NaN}}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(registry.ScoresValidationError, match="ind.extra"):
+        registry.validate_scores_file(path, spec)
+
+
+def test_validate_rejects_non_numeric_undeclared_score(tmp_path: Path) -> None:
+    spec = registry.get("independent")
+    path = _write(
+        tmp_path / "scores.jsonl",
+        [{"id": "a", "scores": {"ind.faith_score": 0.4, "ind.rel_score": 0.2, "ind.x": "hi"}}],
+    )
+
+    with pytest.raises(registry.ScoresValidationError, match="must be a number"):
+        registry.validate_scores_file(path, spec)
+
+
 def test_validate_rejects_wrong_row_count(tmp_path: Path) -> None:
     spec = registry.get("dummy_direct")
     path = _write(tmp_path / "scores.jsonl", [{"id": "a", "scores": {}}])

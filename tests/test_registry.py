@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
+from rag_reliability.dataset import load_jsonl
 from rag_reliability.methods import registry
+from rag_reliability.schema import Prediction
 
 
 def _ctx(tmp_path: Path) -> registry.CommandContext:
@@ -120,24 +122,19 @@ def test_demo_runner_keys_are_known(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_corpus_wide_methods_declare_score_keys() -> None:
-    """Метод, участвующий в корпус-wide протоколе, обязан объявить свои сигналы.
+def test_every_real_method_declares_score_keys() -> None:
+    """Буквальный контракт карточки B2: у каждого реального метода score_keys непусты.
 
-    Дамми — единственное исключение: он существует ради смоука пайплайна.
+    Единственное исключение — дамми: они существуют ради смоука пайплайна.
+    Ослаблять инвариант до «только у corpus_wide» нельзя: тогда метод молча
+    выпадает из протокола, а тест остаётся зелёным.
     """
-    for spec in registry.METHODS.values():
-        if not spec.corpus_wide or spec.name in registry.DUMMY_METHODS:
-            continue
-        assert spec.score_keys, f"{spec.name} is corpus_wide but declares no score_keys"
-
-
-def test_methods_without_score_keys_are_parked_for_wave_three() -> None:
-    """Пустые score_keys допустимы только у дамми и у явно отложенных методов."""
-    for spec in registry.METHODS.values():
-        if spec.score_keys or spec.name in registry.DUMMY_METHODS:
-            continue
-        assert not spec.corpus_wide, f"{spec.name} has no score_keys but claims corpus_wide"
-        assert spec.name in registry.WAVE3_OWNER, f"{spec.name} has no wave-3 owner recorded"
+    missing = [
+        spec.name
+        for spec in registry.METHODS.values()
+        if not spec.score_keys and spec.name not in registry.DUMMY_METHODS
+    ]
+    assert not missing, f"methods without score_keys: {missing}"
 
 
 def test_score_keys_use_registered_method_prefixes() -> None:
@@ -172,9 +169,52 @@ def test_build_scorer_refuses_parked_methods_with_wave_three_pointer(tmp_path: P
         registry.build_scorer("encoder", _ctx(tmp_path))
 
 
-def test_binary_only_methods_are_excluded_from_corpus_wide() -> None:
-    for name in registry.BINARY_ONLY_METHODS:
-        assert not registry.get(name).corpus_wide
+def test_independent_is_the_only_method_allowed_to_binarize(tmp_path: Path) -> None:
+    """Карточка разрешает бинарное решение ровно одному методу.
+
+    Реестр не вправе завести себе дополнительные исключения: у каждого метода
+    со скорером решение обнуляется, кроме independent.
+    """
+    ctx = replace(_ctx(tmp_path), m3_backend="dummy")
+    samples = load_jsonl("data/dummy.jsonl")
+
+    binarizing = []
+    for spec in registry.METHODS.values():
+        if spec.build_scorer is None:
+            continue
+        try:
+            scorer = registry.build_scorer(spec.name, ctx)
+            predictions = [scorer(sample) for sample in samples]
+        except (ImportError, FileNotFoundError, KeyError, SystemExit):
+            # Нужна MLX-модель, сеть или артефакт (mlx_backend уходит в sys.exit
+            # при отсутствии mlx-lm); общий путь покрыт тестом ниже.
+            continue
+        if any(p.faithfulness_pred or p.relevance_pred for p in predictions):
+            binarizing.append(spec.name)
+
+    assert binarizing == ["independent"]
+
+
+def test_text_judges_share_one_unbinarizing_score_path() -> None:
+    """prompt/lora/m3 идут через verdict_scores + scores_only — общий код, общий инвариант.
+
+    Это и есть гарантия для методов, чей скорер нельзя собрать без MLX.
+    """
+    verdict = Prediction(id="x", faithfulness_pred=1, relevance_pred=1)
+    for prefix in ("m3", "prompt", "lora"):
+        scored = registry.scores_only(verdict, registry.verdict_scores(verdict, prefix))
+        assert scored.faithfulness_pred == 0
+        assert scored.relevance_pred == 0
+        assert set(scored.scores) == {f"{prefix}.p_faith", f"{prefix}.p_rel"}
+
+
+def test_contract_version_tracks_the_declared_contract() -> None:
+    spec = registry.get("independent")
+    same = registry.contract_version(spec)
+
+    assert registry.contract_version(spec) == same
+    changed = replace(spec, score_keys=(*spec.score_keys, "ind.extra"))
+    assert registry.contract_version(changed) != same
 
 
 def test_list_methods_prints_the_new_contract_fields() -> None:

@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -29,12 +30,10 @@ if TYPE_CHECKING:
     from rag_reliability.schema import Prediction, RagSample
 
 # Префиксы ключей scores, закреплённые за методами (HANDOFF.md §7.1 + карточка B2).
-SCORE_PREFIXES: tuple[str, ...] = ("surf.", "m3.", "m6.", "enc.", "ld.", "ind.", "stack.")
-
-# Легаси-семейства, которые выдают только бинарный вердикт и не имеют непрерывного
-# сигнала: им нечего класть в scores, поэтому они не участвуют в корпус-wide протоколе.
-BINARY_ONLY_METHODS: frozenset[str] = frozenset(
-    {"prompt_direct", "prompt_marker", "lora_direct", "lora_marker"}
+# prompt./lora. добавлены под семейства реестра, которых §7.1 не знала: свой префикс
+# на семейство — единственное, что гарантирует отсутствие коллизий в стэкере.
+SCORE_PREFIXES: tuple[str, ...] = (
+    "surf.", "m3.", "m6.", "enc.", "ld.", "ind.", "prompt.", "lora.", "stack.",
 )
 
 # Дамми-бэкенды существуют ради смоуков пайплайна, а не ради сигнала.
@@ -365,12 +364,16 @@ def _dummy_scorer(mode: str) -> ScorerFactory:
     return build
 
 
-def _m3_scores(prediction: Prediction) -> dict[str, float]:
+def verdict_scores(prediction: Prediction, prefix: str) -> dict[str, float]:
     """Вероятности вердикта по цепочке logprobs -> regex -> 0.5/0.5.
 
     У текстовых бэкендов (mlx, openai, dummy) вероятностей нет: разобранный
     вердикт и есть вся информация, а нераспарсенный ответ — незнание, то есть
     0.5, а не «ненадёжно». Кейс не теряется ни в одной ветке.
+
+    Сигнал грубый (три уровня), но это настоящий сигнал метода, а не заглушка:
+    любой судья-по-тексту описывается этой же цепочкой, поэтому prompt/lora
+    получают её на тех же основаниях, что и Метод 3.
     """
     p_faith = prediction.faithfulness_prob
     p_rel = prediction.relevance_prob
@@ -380,7 +383,40 @@ def _m3_scores(prediction: Prediction) -> dict[str, float]:
         else:
             p_faith = float(prediction.faithfulness_pred)
             p_rel = float(prediction.relevance_pred)
-    return {"m3.p_faith": float(p_faith), "m3.p_rel": float(p_rel)}
+    return {f"{prefix}.p_faith": float(p_faith), f"{prefix}.p_rel": float(p_rel)}
+
+
+def _m3_scores(prediction: Prediction) -> dict[str, float]:
+    return verdict_scores(prediction, "m3")
+
+
+def _prompt_scorer(mode: str, family: str) -> ScorerFactory:
+    """Судья по сгенерированному тексту: zero-shot промпт (family=prompt) или LoRA."""
+
+    def build(ctx: CommandContext) -> Scorer:
+        from rag_reliability.mlx_backend import make_generate_fn  # noqa: PLC0415
+        from rag_reliability.parsing import parse_prediction  # noqa: PLC0415
+        from rag_reliability.prompts import (  # noqa: PLC0415
+            build_direct_prompt,
+            build_marker_prompt,
+        )
+
+        adapter_path = None
+        if family == "lora":
+            adapter_path = (
+                ctx.direct_adapter_path if mode == "direct" else ctx.marker_adapter_path
+            )
+        build_prompt = build_direct_prompt if mode == "direct" else build_marker_prompt
+        generate_fn = make_generate_fn(ctx.model, ctx.max_tokens, adapter_path=adapter_path)
+
+        def score(sample: RagSample) -> Prediction:
+            raw_output = generate_fn(build_prompt(sample))
+            parsed = parse_prediction(raw_output, sample.id, expect_marker=(mode == "marker"))
+            return scores_only(parsed, verdict_scores(parsed, family))
+
+        return score
+
+    return build
 
 
 def _m3_scorer(name: str) -> ScorerFactory:  # noqa: C901 - одна ветка на бэкенд
@@ -554,6 +590,10 @@ def _independent_scorer(ctx: CommandContext) -> Scorer:
 
 _M3_SCORE_KEYS = ("m3.p_faith", "m3.p_rel")
 _M3_SCORE_EXPR = "m3.p_faith * m3.p_rel"
+_PROMPT_SCORE_KEYS = ("prompt.p_faith", "prompt.p_rel")
+_PROMPT_SCORE_EXPR = "prompt.p_faith * prompt.p_rel"
+_LORA_SCORE_KEYS = ("lora.p_faith", "lora.p_rel")
+_LORA_SCORE_EXPR = "lora.p_faith * lora.p_rel"
 
 
 METHODS: dict[str, MethodSpec] = {
@@ -567,19 +607,27 @@ METHODS: dict[str, MethodSpec] = {
     ),
     "prompt_direct": MethodSpec(
         "prompt_direct", "Zero-shot prompt — direct", "prompt", "direct", _prompt("direct"),
-        "prompt", ("MLX model",), corpus_wide=False,
+        "prompt", ("MLX model",),
+        score_keys=_PROMPT_SCORE_KEYS, default_score_expr=_PROMPT_SCORE_EXPR,
+        build_scorer=_prompt_scorer("direct", "prompt"),
     ),
     "prompt_marker": MethodSpec(
         "prompt_marker", "Zero-shot prompt — marker", "prompt", "marker", _prompt("marker"),
-        "prompt", ("MLX model",), corpus_wide=False,
+        "prompt", ("MLX model",),
+        score_keys=_PROMPT_SCORE_KEYS, default_score_expr=_PROMPT_SCORE_EXPR,
+        build_scorer=_prompt_scorer("marker", "prompt"),
     ),
     "lora_direct": MethodSpec(
         "lora_direct", "LoRA — direct", "lora", "direct", _lora("direct"), "lora",
-        ("results/adapters_direct",), corpus_wide=False,
+        ("results/adapters_direct",),
+        score_keys=_LORA_SCORE_KEYS, default_score_expr=_LORA_SCORE_EXPR,
+        build_scorer=_prompt_scorer("direct", "lora"),
     ),
     "lora_marker": MethodSpec(
         "lora_marker", "LoRA — marker", "lora", "marker", _lora("marker"), "lora",
-        ("results/adapters_marker",), corpus_wide=False,
+        ("results/adapters_marker",),
+        score_keys=_LORA_SCORE_KEYS, default_score_expr=_LORA_SCORE_EXPR,
+        build_scorer=_prompt_scorer("marker", "lora"),
     ),
     "lettucedetect": MethodSpec(
         "lettucedetect", "LettuceDetect features", "lettucedetect", None, _lettucedetect,
@@ -669,15 +717,34 @@ def resolve_names(raw: str) -> list[str]:
 
 
 # Кто в волне 3 доводит метод до корпус-wide скоринга (для сообщения об ошибке и PR).
-_BINARY_ONLY_REASON = "binary-only legacy baseline: no continuous signal to score"
 WAVE3_OWNER: dict[str, str] = {
     "encoder": "out-of-fold scoring is task C2 (task/C2-encoder)",
     "m6_selfcheck": "grounding rewrite is task C4 (task/C4-m6-grounding)",
-    "prompt_direct": _BINARY_ONLY_REASON,
-    "prompt_marker": _BINARY_ONLY_REASON,
-    "lora_direct": _BINARY_ONLY_REASON,
-    "lora_marker": _BINARY_ONLY_REASON,
 }
+
+
+def contract_version(spec: MethodSpec) -> str:
+    """Версия метода для run.yaml: хэш его объявленного контракта.
+
+    Меняется ровно тогда, когда меняются имя, семейство, режим, набор ключей,
+    выражение по умолчанию или corpus_wide, — то есть когда старый артефакт
+    перестаёт быть сопоставимым с новым. Версия реализации пришпилена git-хэшем
+    в том же run.yaml; вручную поддерживаемый номер здесь протух бы первым же
+    рефакторингом.
+    """
+    payload = json.dumps(
+        {
+            "name": spec.name,
+            "family": spec.family,
+            "mode": spec.mode,
+            "score_keys": list(spec.score_keys),
+            "default_score_expr": spec.default_score_expr,
+            "corpus_wide": spec.corpus_wide,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return "contract-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
 def build_scorer(name: str, ctx: CommandContext) -> Scorer:
@@ -737,18 +804,30 @@ def validate_scores_file(
             n_rows += 1
 
             scores = row.get("scores")
-            if scores is None and spec.score_keys:
+            if scores is None:
+                if spec.score_keys:
+                    raise ScoresValidationError(
+                        f"Row {sample_id!r} at {path}:{line_number} has no 'scores'; "
+                        f"method {spec.name!r} declares {list(spec.score_keys)}"
+                    )
+                scores = {}
+            if not isinstance(scores, dict):
                 raise ScoresValidationError(
-                    f"Row {sample_id!r} at {path}:{line_number} has no 'scores'; "
-                    f"method {spec.name!r} declares {list(spec.score_keys)}"
+                    f"Field 'scores' for sample {sample_id!r} at {path}:{line_number} "
+                    f"must be an object, got {type(scores).__name__}"
                 )
+
             for key in spec.score_keys:
                 if key not in scores:
                     raise ScoresValidationError(
                         f"Missing score key {key!r} for sample {sample_id!r} at "
                         f"{path}:{line_number}; present: {sorted(scores)[:8]}"
                     )
-                value = scores[key]
+
+            # Проверяются ВСЕ ключи, а не только объявленные: незаявленный NaN
+            # тоже попадёт в стэкер и тоже всё сломает — контракт задаёт минимум
+            # содержимого, а не разрешение писать мусор мимо него.
+            for key, value in scores.items():
                 if not isinstance(value, int | float) or isinstance(value, bool):
                     raise ScoresValidationError(
                         f"Score {key!r} for sample {sample_id!r} at {path}:{line_number} "

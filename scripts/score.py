@@ -55,6 +55,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     parser.add_argument("--model", default="mlx-community/Qwen2.5-1.5B-Instruct-4bit")
     parser.add_argument("--max-tokens", type=int, default=64)
+    parser.add_argument("--direct-adapter-path", default="results/adapters_direct")
+    parser.add_argument("--marker-adapter-path", default="results/adapters_marker")
     parser.add_argument("--lettucedetect-model", default="results/lettucedetect/classifier.joblib")
     parser.add_argument(
         "--m3-backend", choices=["dummy", "mlx", "openai", "openai_judge"], default="mlx"
@@ -80,6 +82,8 @@ def build_context(args: argparse.Namespace) -> registry.CommandContext:
         predictions_path=output,
         model=args.model,
         max_tokens=args.max_tokens,
+        direct_adapter_path=args.direct_adapter_path,
+        marker_adapter_path=args.marker_adapter_path,
         lettucedetect_model=args.lettucedetect_model,
         m3_backend=args.m3_backend,
         m3_max_tokens=args.m3_max_tokens,
@@ -182,6 +186,7 @@ def write_run_yaml(
     payload = {
         "method": {
             "name": spec.name,
+            "version": registry.contract_version(spec),
             "family": spec.family,
             "mode": spec.mode,
             "score_keys": list(spec.score_keys),
