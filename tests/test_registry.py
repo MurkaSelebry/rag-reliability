@@ -177,6 +177,21 @@ def test_binary_only_methods_are_excluded_from_corpus_wide() -> None:
         assert not registry.get(name).corpus_wide
 
 
+def test_list_methods_prints_the_new_contract_fields() -> None:
+    """rag-judge остаётся окном в реестр: новые поля должны быть видны оператору."""
+    from typer.testing import CliRunner
+
+    from rag_reliability.cli import app
+
+    result = CliRunner().invoke(app, ["list-methods"])
+
+    assert result.exit_code == 0
+    assert "corpus-wide" in result.output
+    assert "split-only" in result.output
+    assert "m3.p_faith" in result.output
+    assert "ind.faith_score" in result.output
+
+
 def test_m3_mode_and_backend_shared_by_command_and_scorer(tmp_path: Path) -> None:
     """Одна точка разбора имени: subprocess и score.py не должны разъехаться."""
     ctx = replace(_ctx(tmp_path), m3_backend="mlx")
