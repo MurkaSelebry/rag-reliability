@@ -445,3 +445,52 @@ def test_cli_check_returns_one_on_a_tampered_artifact(tmp_path: Path) -> None:
     folds.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
     assert prepare_splits.main(["--check", "--folds", str(folds), "--data", str(corpus)]) == 1
+
+
+def test_check_folds_hashes_the_data_file_it_was_given(tmp_path: Path) -> None:
+    """Перетасованный корпус того же состава не должен проходить проверку.
+
+    sha должна считаться с файла, поданного на вход, а не с пути, записанного
+    внутри артефакта: иначе проверка «sha256 корпуса совпадает» ничего не стоит.
+    """
+    samples = make_corpus(300, seed=25, group_size=2)
+    _, folds = _materialize(tmp_path, samples)
+    reordered = tmp_path / "reordered.jsonl"
+    save_jsonl(list(reversed(samples)), reordered)
+
+    assert check_folds(folds, samples)["passed"]
+
+    report = check_folds(folds, samples, corpus_path=reordered)
+
+    assert not report["passed"]
+    assert any("sha256 mismatch" in error for error in report["errors"])
+
+
+def test_check_folds_rejects_tampered_recorded_stats(tmp_path: Path) -> None:
+    """Артефакт не может утверждать про себя числа, которых нет в корпусе."""
+    samples = make_corpus(300, seed=26, group_size=2)
+    _, folds = _materialize(tmp_path, samples)
+    payload = json.loads(folds.read_text(encoding="utf-8"))
+    assert payload["stats"]["excluded_ids"] == 0  # oversized-групп тут нет
+    payload["stats"]["leak_check"]["query_overlap"] = 0.99
+    payload["stats"]["excluded_ids"] = 42
+    payload["stats"]["n_groups"] = 1
+    folds.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    report = check_folds(folds, samples)
+
+    assert not report["passed"]
+    assert any("query_overlap" in error for error in report["errors"])
+    assert any("excluded_ids" in error for error in report["errors"])
+
+
+def test_cli_check_rejects_a_different_data_file(tmp_path: Path) -> None:
+    samples = make_corpus(300, seed=27, group_size=2)
+    corpus = tmp_path / "corpus.jsonl"
+    save_jsonl(samples, corpus)
+    folds = tmp_path / "folds.json"
+    prepare_splits.main(_cli_args(corpus, folds))
+    reordered = tmp_path / "reordered.jsonl"
+    save_jsonl(list(reversed(samples)), reordered)
+
+    assert prepare_splits.main(["--check", "--folds", str(folds), "--data", str(reordered)]) == 1

@@ -561,11 +561,22 @@ CHUNK_LEAK_LIMIT = 0.05
 FOLD_SIZE_TOLERANCE = 0.05
 
 
-def check_folds(path: str | Path, samples: Sequence[RagSample]) -> dict[str, Any]:
+def check_folds(
+    path: str | Path,
+    samples: Sequence[RagSample],
+    *,
+    corpus_path: str | Path | None = None,
+) -> dict[str, Any]:
     """Валидация существующего ``folds.json``.
 
     Пересчитывает всё из корпуса, а не читает ``stats``: подделанный или
     устаревший артефакт должен падать, а не подтверждаться собственной записью.
+    Пересчитанные величины сравниваются с записанными — расхождение блокирует.
+
+    ``corpus_path`` — файл, из которого загружены ``samples``. Его и надо
+    хешировать: иначе перетасованный корпус с тем же составом записей проходит
+    проверку, потому что sha считается с пути, записанного внутри артефакта, а
+    не с того, что реально подан на вход.
     """
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     errors: list[str] = []
@@ -577,22 +588,24 @@ def check_folds(path: str | Path, samples: Sequence[RagSample]) -> dict[str, Any
         )
 
     corpus = payload["corpus"]
-    corpus_path = Path(corpus["path"])
-    if not corpus_path.exists():
-        errors.append(f"Corpus file not found: {corpus_path}")
+    recorded_path = Path(corpus["path"])
+    hashed_path = Path(corpus_path) if corpus_path is not None else recorded_path
+    if not hashed_path.exists():
+        errors.append(f"Corpus file not found: {hashed_path}")
     else:
-        actual_sha = sha256_file(corpus_path)
+        actual_sha = sha256_file(hashed_path)
         if actual_sha != corpus["sha256"]:
             errors.append(
                 f"Corpus sha256 mismatch: folds.json has {corpus['sha256']}, "
-                f"{corpus_path} is {actual_sha}"
+                f"{hashed_path} is {actual_sha}"
             )
+    corpus_path_for_config = recorded_path
     if corpus["n"] != len(samples):
         errors.append(
             f"Corpus size mismatch: folds.json has {corpus['n']}, data has {len(samples)}"
         )
 
-    config = FoldConfig(corpus_path=corpus_path, **payload["config"])
+    config = FoldConfig(corpus_path=corpus_path_for_config, **payload["config"])
     assignment: dict[str, list[int]] = payload["assignment"]
 
     known = {sample.id for sample in samples}
@@ -644,6 +657,9 @@ def check_folds(path: str | Path, samples: Sequence[RagSample]) -> dict[str, Any
             )
 
     stats = compute_stats(samples, groups, assignment, config)
+    for mismatch in _stats_mismatches(payload.get("stats"), stats):
+        errors.append(f"recorded stats disagree with the corpus: {mismatch}")
+
     leak = stats["leak_check"]
     near_dup_key = f"near_dup_{config.near_dup_threshold:g}"
 
@@ -677,6 +693,44 @@ def check_folds(path: str | Path, samples: Sequence[RagSample]) -> dict[str, Any
                 )
 
     return _report(payload, stats, errors, warnings)
+
+
+def _stats_mismatches(recorded: Any, recomputed: Any, prefix: str = "stats") -> list[str]:
+    """Расхождения записанного блока ``stats`` с пересчитанным из корпуса.
+
+    Без этого сравнения пересчёт бесполезен как защита: валидатор считал бы
+    правильные числа, а артефакт мог бы утверждать любые другие — и проходить.
+    """
+    if recorded is None:
+        return [f"{prefix} is missing"]
+    if isinstance(recomputed, dict):
+        if not isinstance(recorded, dict):
+            return [f"{prefix}: expected an object, got {type(recorded).__name__}"]
+        mismatches = []
+        for key in sorted(set(recorded) | set(recomputed)):
+            if key not in recorded:
+                mismatches.append(f"{prefix}.{key} is missing")
+            elif key not in recomputed:
+                mismatches.append(f"{prefix}.{key} is unexpected")
+            else:
+                mismatches += _stats_mismatches(recorded[key], recomputed[key], f"{prefix}.{key}")
+        return mismatches
+    if isinstance(recomputed, list):
+        if not isinstance(recorded, list) or len(recorded) != len(recomputed):
+            return [f"{prefix}: {recorded!r} != {recomputed!r}"]
+        return [
+            mismatch
+            for index, (left, right) in enumerate(zip(recorded, recomputed, strict=True))
+            for mismatch in _stats_mismatches(left, right, f"{prefix}[{index}]")
+        ]
+    if isinstance(recomputed, float) and isinstance(recorded, int | float):
+        # Записано тем же кодом, поэтому расхождение допустимо только на уровне
+        # округления json; любое содержательное отличие — подделка или устаревание.
+        if abs(float(recorded) - recomputed) <= 1e-9:
+            return []
+    elif recorded == recomputed and isinstance(recorded, type(recomputed)):
+        return []
+    return [f"{prefix}: recorded {recorded!r}, corpus says {recomputed!r}"]
 
 
 def _report(

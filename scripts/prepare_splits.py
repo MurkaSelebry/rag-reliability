@@ -87,7 +87,7 @@ def _generate(args: argparse.Namespace, samples: list[RagSample]) -> int:
     )
     write_folds(args.output, samples, groups, assignment, config)
 
-    report = check_folds(args.output, samples)
+    report = check_folds(args.output, samples, corpus_path=args.data)
     stats = report["recomputed_stats"]
     print(f"folds -> {args.output}")
     print(f"  cases              {len(samples)} ({len(assignment)} assigned)")
@@ -101,7 +101,7 @@ def _generate(args: argparse.Namespace, samples: list[RagSample]) -> int:
 
 
 def _validate(args: argparse.Namespace, samples: list[RagSample]) -> int:
-    report = check_folds(args.folds, samples)
+    report = check_folds(args.folds, samples, corpus_path=args.data)
     stats = report["recomputed_stats"]
     print(f"check {args.folds}: {'PASS' if report['passed'] else 'FAIL'}")
     if stats is not None:
