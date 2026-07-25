@@ -19,7 +19,6 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 from rag_reliability.dataset import load_jsonl
@@ -68,11 +67,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--bootstrap-B", dest="bootstrap_b", type=int, default=10_000)
     parser.add_argument("--null-trials", type=int, default=500)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--allow-partial",
-        action="store_true",
-        help="оценивать только кейсы, покрытые предсказаниями; непокрытые считаются явно",
-    )
     parser.add_argument(
         "--legacy-holdout",
         action="store_true",
@@ -159,37 +153,33 @@ def infer_method_variant(scores_path: Path) -> tuple[str, str]:
     return parts[-3], parts[-2]
 
 
-@dataclass(frozen=True)
-class Alignment:
-    """Кейсы, на которых считается метрика, и явный учёт всех выброшенных."""
+def require_full_coverage(
+    samples: Sequence[RagSample], predictions: Sequence[Prediction], scores_path: Path
+) -> list[Prediction]:
+    """Частичный артефакт в CV не участвует до полного прогона (спека §2.2).
 
-    samples: list[RagSample]
-    predictions: list[Prediction]
-    n_missing_predictions: int
-
-
-def align(
-    samples: Sequence[RagSample], predictions: Sequence[Prediction], *, allow_partial: bool
-) -> Alignment:
+    Оценить покрытую часть и напечатать число выглядит безобиднее, чем есть:
+    состав кейсов становится свойством того, докуда дошёл прогон, а метрики
+    разных методов перестают быть сравнимыми между собой. Поэтому отсутствие
+    предсказания — отказ, а не подвыборка.
+    """
     by_id = {prediction.id: prediction for prediction in predictions}
     if len(by_id) != len(predictions):
-        raise ValueError("Duplicate prediction ids in the scores file")
+        raise ValueError(f"Duplicate prediction ids in {scores_path}")
     missing = [sample.id for sample in samples if sample.id not in by_id]
-    if missing and not allow_partial:
+    if not missing:
+        return [by_id[sample.id] for sample in samples]
+
+    if len(missing) == len(samples):
         raise ValueError(
-            f"Missing predictions for {len(missing)} of {len(samples)} sample(s): {missing[:5]}. "
-            "Pass --allow-partial to evaluate the covered part and record the rest."
-        )
-    covered = [sample for sample in samples if sample.id in by_id]
-    if not covered:
-        raise ValueError(
-            f"None of the {len(samples)} corpus ids appear in the scores file "
+            f"None of the {len(samples)} corpus ids appear in {scores_path} "
             f"(scores start with {sorted(by_id)[:3]}); the artifact belongs to another corpus"
         )
-    return Alignment(
-        samples=covered,
-        predictions=[by_id[sample.id] for sample in covered],
-        n_missing_predictions=len(missing),
+    raise ValueError(
+        f"{scores_path} is partial: {len(by_id)} of {len(samples)} corpus case(s) scored, "
+        f"{len(missing)} missing, e.g. {missing[:5]}. Partial artifacts do not take part in CV "
+        "until the full run exists (docs/specs/10_PHASE0 §2.2); rerun the method over the whole "
+        "corpus and evaluate again."
     )
 
 
@@ -207,28 +197,28 @@ def run_cv(args: argparse.Namespace) -> int:
     folds = load_folds(args.folds)
     corpus_sha = check_corpus_hash(folds, args.data)
 
-    aligned = align(samples, load_scores(args.scores), allow_partial=args.allow_partial)
+    predictions = require_full_coverage(samples, load_scores(args.scores), args.scores)
     score_fn = _score_fn(args.score_expr, default_score_fn)
 
     primary = evaluate_cv(
-        aligned.samples,
-        aligned.predictions,
+        samples,
+        predictions,
         folds,
         score_fn=score_fn,
         grid_step=args.grid_step,
     )
     axes = {
         "faithfulness_f1_macro": evaluate_cv_labeled(
-            aligned.samples,
-            aligned.predictions,
+            samples,
+            predictions,
             folds,
             score_fn=_score_fn(args.faith_expr, faith_score_fn),
             grid_step=args.grid_step,
             label_fn=lambda sample: sample.faithfulness,
         ),
         "relevance_f1_macro": evaluate_cv_labeled(
-            aligned.samples,
-            aligned.predictions,
+            samples,
+            predictions,
             folds,
             score_fn=_score_fn(args.rel_expr, rel_score_fn),
             grid_step=args.grid_step,
@@ -258,7 +248,7 @@ def run_cv(args: argparse.Namespace) -> int:
         variant=variant,
         primary=primary,
         axes=axes,
-        predictions=aligned.predictions,
+        predictions=predictions,
         protocol={
             "folds": str(args.folds).replace("\\", "/"),
             "folds_sha256": _sha256_of(args.folds),
@@ -266,9 +256,9 @@ def run_cv(args: argparse.Namespace) -> int:
             "corpus_sha256": corpus_sha,
             "n_folds": folds["config"]["n_folds"],
             "n_repeats": folds["config"]["n_repeats"],
+            "n_corpus": len(samples),
             "n_evaluated": len(primary.ids),
             "n_excluded": primary.n_excluded,
-            "n_missing_predictions": aligned.n_missing_predictions,
             "score_expr": args.score_expr or "p_faith * p_rel",
             "scores": str(args.scores).replace("\\", "/"),
         },
@@ -287,9 +277,11 @@ def _comparison_result(
     args: argparse.Namespace, samples: Sequence[RagSample], path: Path, folds: dict
 ) -> CVResult:
     """Прогон сравнения оценивается тем же протоколом: иначе Δ мерит разницу протоколов."""
-    aligned = align(samples, load_scores(path), allow_partial=True)
     return evaluate_cv(
-        aligned.samples, aligned.predictions, folds, score_fn=default_score_fn,
+        samples,
+        require_full_coverage(samples, load_scores(path), path),
+        folds,
+        score_fn=default_score_fn,
         grid_step=args.grid_step,
     )
 
@@ -365,9 +357,9 @@ def _print_summary(report) -> None:
         f"above_noise={primary.above_noise}"
     )
     print(
-        f"  n_evaluated {report.protocol['n_evaluated']}  "
-        f"n_excluded {report.protocol['n_excluded']}  "
-        f"n_missing_predictions {report.protocol['n_missing_predictions']}"
+        f"  n_corpus {report.protocol['n_corpus']}  "
+        f"n_evaluated {report.protocol['n_evaluated']}  "
+        f"n_excluded {report.protocol['n_excluded']} (absent from folds.assignment)"
     )
     for comparison in report.comparisons:
         print(

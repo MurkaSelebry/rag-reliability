@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 
 from rag_reliability.evaluation.bootstrap import bootstrap_ci, exact_mcnemar, paired_bootstrap
-from rag_reliability.evaluation.nullcal import null_calibration, percentile_of
+from rag_reliability.evaluation.nullcal import FitApplyFn, null_calibration, percentile_of
 from rag_reliability.metrics import degenerate_rate, operational_metrics
 from rag_reliability.schema import EvaluationReport, MetricWithCI, Prediction, RagSample
 from rag_reliability.splits import sha256_file
@@ -50,10 +50,14 @@ class LeakageError(ValueError):
 class CVResult:
     """Результат кросс-валидации с вложенным подбором порога.
 
-    ``oof_pred_by_repeat`` — расширение относительно карточки B1. Оно нужно,
-    потому что первичная статистика (среднее OOF macro-F1 по повторам) совпадает
-    с той, что считает ``nullcal.null_calibration``; без матрицы по повторам ДИ
-    пришлось бы строить для другой статистики, чем перцентиль шума.
+    Первичная метрика считается ОДИН раз по склеенному ``oof_pred`` (карточка B1
+    §1). ``per_repeat_f1`` — диагностика разброса по жребию, а не первичное
+    число: величины не эквивалентны и на вырожденных данных расходятся на
+    десятые доли.
+
+    ``oof_pred_by_repeat``, ``fold_matrix`` и ``used_fit_fn`` — расширение
+    относительно карточки: первые два нужны для диагностик и нулевой калибровки,
+    третий — чтобы ``metric_with_ci`` не подсунул калибровку от чужой процедуры.
     """
 
     oof_scores: np.ndarray
@@ -65,6 +69,7 @@ class CVResult:
     n_excluded: int
     oof_pred_by_repeat: np.ndarray
     fold_matrix: np.ndarray
+    used_fit_fn: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -124,10 +129,11 @@ def fit_threshold(
 
 
 def mean_macro_f1_over_repeats(y: Any, pred_by_repeat: Any) -> float:
-    """Первичная статистика: среднее OOF macro-F1 по повторам.
+    """Диагностика: среднее OOF macro-F1 по повторам.
 
-    Та же агрегация, что у ``nullcal.null_calibration``. Совпадение обязательно:
-    иначе перцентиль шума описывает не ту величину, рядом с которой напечатан.
+    Не первичная метрика. Первичная считается один раз по склеенному ``oof_pred``
+    (карточка B1 §1), и эти две величины не эквивалентны: усреднение по повторам
+    маскирует случаи, где повторы расходятся в решениях по одному кейсу.
     """
     y_array = np.asarray(y, dtype=int)
     matrix = np.asarray(pred_by_repeat)
@@ -659,6 +665,7 @@ def evaluate_cv_labeled(
         n_excluded=n_excluded,
         oof_pred_by_repeat=oof_pred_by_repeat,
         fold_matrix=matrix,
+        used_fit_fn=fit_fn is not None,
     )
 
 
@@ -689,23 +696,39 @@ def metric_with_ci(
     null_trials: int = 500,
     grid_step: float = 0.01,
     seed: int = 0,
+    fit_apply_fn: FitApplyFn | None = None,
 ) -> MetricWithCI:
     """Точечная оценка, 95% ДИ и перцентиль нулевого распределения.
 
-    ДИ строится для той же статистики (среднее OOF macro-F1 по повторам), что
-    выдаёт нулевая калибровка, и той же процедурой подбора порога — иначе число,
-    интервал и перцентиль описывали бы три разных протокола.
+    Точка и ДИ считаются по склеенному ``oof_pred`` — по тому же вектору решений,
+    который метод выдал бы в проде, и ровно один раз по всем кейсам.
+
+    ``fit_apply_fn`` обязателен, если ``evaluate_cv`` работал с ``fit_fn``: шум
+    должен проходить через ту же процедуру, что реальные скоры, а обучение модели
+    подбором порога не воспроизводится. Подставлять ``threshold_fit_apply`` за
+    вызывающего нельзя — перцентиль описывал бы более простую процедуру, чем та,
+    что дала число, то есть завышал бы уверенность.
+
+    Остаточное расхождение, которое нельзя устранить, не меняя ``nullcal``:
+    ``null_calibration`` усредняет OOF macro-F1 по повторам, а первичная метрика
+    склеивает решения повторов голосованием. Процедура уровня фолда — подбор
+    порога на train и применение к held-out — совпадает; различается только
+    способ свести повторы. Это записано в ``diagnostics.null_aggregation``.
     """
-    boot = bootstrap_ci(
-        result.y, result.oof_pred_by_repeat, mean_macro_f1_over_repeats, B=bootstrap_b, seed=seed
-    )
+    if result.used_fit_fn and fit_apply_fn is None:
+        raise ValueError(
+            "This CVResult was produced with a fit_fn, so the noise floor must fit the same "
+            "model on random data; pass fit_apply_fn reproducing it. Calibrating a stack or "
+            "an encoder against a bare threshold search understates the noise floor."
+        )
+    boot = bootstrap_ci(result.y, result.oof_pred, macro_f1_binary, B=bootstrap_b, seed=seed)
     null = null_calibration(
         result.y,
         result.fold_matrix,
         n_trials=null_trials,
         grid_step=grid_step,
         seed=seed,
-        fit_apply_fn=threshold_fit_apply,
+        fit_apply_fn=fit_apply_fn or threshold_fit_apply,
     )
     percentile = percentile_of(boot.point, null)
     return MetricWithCI(
@@ -743,9 +766,9 @@ def compare_runs(
 
     paired = paired_bootstrap(
         y,
-        primary.oof_pred_by_repeat[left],
-        other.oof_pred_by_repeat[right],
-        mean_macro_f1_over_repeats,
+        primary.oof_pred[left],
+        other.oof_pred[right],
+        macro_f1_binary,
         B=bootstrap_b,
         seed=seed,
     )
@@ -774,10 +797,16 @@ def build_report(
     null_trials: int = 500,
     grid_step: float = 0.01,
     seed: int = 0,
+    fit_apply_fn: FitApplyFn | None = None,
 ) -> EvaluationReport:
     """Собрать ``EvaluationReport``: число без ДИ и перцентиля шума не публикуется."""
     primary_metric = metric_with_ci(
-        primary, bootstrap_b=bootstrap_b, null_trials=null_trials, grid_step=grid_step, seed=seed
+        primary,
+        bootstrap_b=bootstrap_b,
+        null_trials=null_trials,
+        grid_step=grid_step,
+        seed=seed,
+        fit_apply_fn=fit_apply_fn,
     )
     axis_metrics = {
         name: metric_with_ci(
@@ -823,7 +852,13 @@ def build_report(
         "threshold_sd": float(np.std(primary.thresholds)),
         "operating_threshold": threshold,
         "per_repeat_f1": [float(value) for value in primary.per_repeat_f1],
+        "mean_per_repeat_f1": mean_macro_f1_over_repeats(primary.y, primary.oof_pred_by_repeat),
         "sd_across_repeats": float(np.std(primary.per_repeat_f1)),
+        # Процедура уровня фолда у шума и у метрики одна; повторы шум сводит
+        # усреднением, метрика — голосованием. Расхождение видно из соседнего
+        # mean_per_repeat_f1 и не прячется за общим числом.
+        "null_aggregation": "mean of per-repeat OOF macro-F1 (nullcal contract)",
+        "primary_aggregation": "single macro-F1 over the glued OOF decision",
         "bootstrap_B": bootstrap_b,
         "null_trials": null_trials,
         "seed": seed,

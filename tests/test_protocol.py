@@ -28,6 +28,7 @@ from rag_reliability.evaluation.protocol import (
     mean_macro_f1_over_repeats,
     metric_with_ci,
     rel_score_fn,
+    threshold_fit_apply,
 )
 from rag_reliability.schema import Prediction, RagSample
 from rag_reliability.splits import sha256_file
@@ -447,15 +448,69 @@ def _report(samples, predictions, folds, **kwargs):
     )
 
 
-def test_primary_point_estimate_is_the_statistic_the_null_calibration_measures() -> None:
+def test_primary_is_one_macro_f1_over_the_glued_oof_decision() -> None:
+    """Карточка §1: метрика считается ОДИН раз по склеенным OOF-решениям."""
     samples, predictions = separable_corpus(80)
     folds = make_folds(round_robin([s.id for s in samples], n_repeats=3), n_repeats=3)
     result = evaluate_cv(samples, predictions, folds)
 
     metric = metric_with_ci(result, **CHEAP)
 
-    assert metric.value == pytest.approx(float(np.mean(result.per_repeat_f1)))
+    assert metric.value == pytest.approx(macro_f1_binary(result.y, result.oof_pred))
     assert metric.ci95[0] <= metric.value <= metric.ci95[1]
+    assert metric.null_percentile is not None
+
+
+def test_primary_is_not_the_average_of_per_repeat_metrics() -> None:
+    """Когда повторы спорят о кейсах, две величины расходятся — и печатать надо склеенную.
+
+    Каждый повтор ловит свою треть негативов и в одиночку выглядит прилично
+    (0.625), но негатив, который поймал ровно один повтор из трёх, голосованием
+    объявляется надёжным. Склеенное решение вырождается в константу (0.333) —
+    именно это и должно попасть в отчёт, потому что именно так метод решает.
+    """
+    n_cases, n_repeats = 30, 3
+    y = np.array([1] * 15 + [0] * 15)
+    by_repeat = np.ones((n_cases, n_repeats), dtype=int)
+    for repeat in range(n_repeats):
+        block = slice(15 + repeat * 5, 20 + repeat * 5)
+        by_repeat[block, repeat] = 0
+
+    result = CVResult(
+        oof_scores=np.full(n_cases, 0.5),
+        oof_pred=(by_repeat.mean(axis=1) >= 0.5).astype(int),
+        y=y,
+        ids=[f"case_{index:04d}" for index in range(n_cases)],
+        per_repeat_f1=[macro_f1_binary(y, by_repeat[:, r]) for r in range(n_repeats)],
+        thresholds=[0.5] * (n_repeats * 3),
+        n_excluded=0,
+        oof_pred_by_repeat=by_repeat,
+        fold_matrix=np.array([[index % 3] * n_repeats for index in range(n_cases)]),
+    )
+
+    glued = macro_f1_binary(result.y, result.oof_pred)
+    averaged = mean_macro_f1_over_repeats(result.y, result.oof_pred_by_repeat)
+
+    assert glued == pytest.approx(1 / 3, abs=1e-6)
+    assert averaged == pytest.approx(0.625, abs=1e-6)
+    assert metric_with_ci(result, **CHEAP).value == pytest.approx(glued)
+
+
+def test_null_calibration_refuses_to_stand_in_for_a_fitted_model() -> None:
+    """С fit_fn шум обязан проходить ту же процедуру, включая обучение модели."""
+    samples, predictions = separable_corpus(40)
+    folds = make_folds(round_robin([s.id for s in samples], n_folds=4), n_folds=4)
+
+    def fit_fn(train_predictions, y_train):
+        return lambda batch: np.array([default_score_fn(p) for p in batch])
+
+    result = evaluate_cv(samples, predictions, folds, fit_fn=fit_fn)
+    assert result.used_fit_fn is True
+
+    with pytest.raises(ValueError, match="fit_apply_fn"):
+        metric_with_ci(result, **CHEAP)
+
+    metric = metric_with_ci(result, fit_apply_fn=threshold_fit_apply, **CHEAP)
     assert metric.null_percentile is not None
 
 
@@ -627,25 +682,83 @@ def test_cli_refuses_a_corpus_that_does_not_match_the_folds(tmp_path: Path) -> N
         )
 
 
-def test_cli_requires_allow_partial_for_uncovered_cases(tmp_path: Path) -> None:
+def test_cli_refuses_a_partial_artifact(tmp_path: Path) -> None:
+    """Спека §2.2: частичный артефакт не участвует в CV до полного прогона."""
     paths = cli_fixture(tmp_path)
     rows = paths["scores"].read_text(encoding="utf-8").splitlines()[:60]
     paths["scores"].write_text("\n".join(rows) + "\n", encoding="utf-8")
-    argv = [
-        "--data", str(paths["corpus"]),
-        "--folds", str(paths["folds"]),
-        "--scores", str(paths["scores"]),
-        "--output", str(paths["output"]),
-        *CHEAP_CLI,
-    ]
 
-    with pytest.raises(ValueError, match="Missing predictions"):
-        cli.main(argv)
+    with pytest.raises(ValueError, match="is partial"):
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(paths["scores"]),
+                "--output", str(paths["output"]),
+                *CHEAP_CLI,
+            ]
+        )
 
-    assert cli.main([*argv, "--allow-partial"]) == 0
-    payload = json.loads(paths["output"].read_text(encoding="utf-8"))
-    assert payload["protocol"]["n_missing_predictions"] == 20
-    assert payload["protocol"]["n_evaluated"] == 60
+    assert not paths["output"].exists()
+
+
+def test_cli_refuses_a_partial_comparison_artifact(tmp_path: Path) -> None:
+    """Отказ обязан распространяться и на --compare, иначе Δ считается по подвыборке."""
+    paths = cli_fixture(tmp_path)
+    rival = write_scores(
+        tmp_path / "predictions" / "alfa" / "baselines" / "surface" / "scores.jsonl",
+        [
+            Prediction(
+                id=f"case_{index:04d}",
+                faithfulness_pred=0,
+                relevance_pred=0,
+                scores={"surf.p_faith": 0.5, "surf.p_rel": 0.5},
+            )
+            for index in range(50)
+        ],
+    )
+
+    with pytest.raises(ValueError, match="is partial"):
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(paths["scores"]),
+                "--compare", str(rival),
+                "--output", str(paths["output"]),
+                *CHEAP_CLI,
+            ]
+        )
+
+
+def test_cli_counts_cases_absent_from_the_assignment_against_the_whole_corpus(
+    tmp_path: Path,
+) -> None:
+    """n_excluded — про корпус, а не про покрытую часть: иначе он занижен."""
+    paths = cli_fixture(tmp_path, n=80)
+    folds = json.loads(paths["folds"].read_text(encoding="utf-8"))
+    folds["assignment"] = {
+        key: value for key, value in folds["assignment"].items() if key < "case_0060"
+    }
+    paths["folds"].write_text(json.dumps(folds), encoding="utf-8")
+
+    assert (
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(paths["scores"]),
+                "--output", str(paths["output"]),
+                *CHEAP_CLI,
+            ]
+        )
+        == 0
+    )
+
+    protocol = json.loads(paths["output"].read_text(encoding="utf-8"))["protocol"]
+    assert protocol["n_corpus"] == 80
+    assert protocol["n_evaluated"] == 60
+    assert protocol["n_excluded"] == 20
 
 
 def test_cli_rejects_an_injected_score_expression(tmp_path: Path) -> None:
@@ -734,7 +847,6 @@ def test_cli_reports_an_artifact_from_another_corpus(tmp_path: Path) -> None:
                 "--folds", str(paths["folds"]),
                 "--scores", str(foreign),
                 "--output", str(paths["output"]),
-                "--allow-partial",
                 *CHEAP_CLI,
             ]
         )
