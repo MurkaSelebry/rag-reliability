@@ -123,10 +123,10 @@ def test_wilson_interval_at_zero_is_bounded_and_nonzero_width() -> None:
 def test_surface_vs_m3_zero_shot_regression() -> None:
     labels = _legacy_test_labels()
     surface_ids, surface = _legacy_predictions(
-        "predictions/local/baselines/surface/test.jsonl"
+        "predictions/alfa/baselines/surface/test.jsonl"
     )
     m3_ids, m3 = _legacy_predictions(
-        "predictions/alfa_openrouter/m3/zero_shot/test.jsonl"
+        "predictions/alfa/m3/zero_shot/test.jsonl"
     )
     assert surface_ids == m3_ids
     y = np.array([labels[sample_id] for sample_id in surface_ids], dtype=int)

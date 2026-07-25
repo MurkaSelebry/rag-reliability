@@ -246,7 +246,7 @@ def test_surface_operational_lift_regression() -> None:
         relevance = int(row["binary_relevancy"].strip().lower() in {"true", "1"})
         labels[sample_id] = faith & relevance
 
-    artifact_path = ROOT / "predictions/local/baselines/surface/test.jsonl"
+    artifact_path = ROOT / "predictions/alfa/baselines/surface/test.jsonl"
     artifact_rows = [
         json.loads(line)
         for line in artifact_path.read_text(encoding="utf-8").splitlines()

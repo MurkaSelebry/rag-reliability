@@ -33,7 +33,7 @@ def _legacy_test_y() -> np.ndarray:
         relevance = int(row["binary_relevancy"].strip().lower() in {"true", "1"})
         labels[sample_id] = faith & relevance
 
-    artifact = ROOT / "predictions/local/baselines/surface/test.jsonl"
+    artifact = ROOT / "predictions/alfa/baselines/surface/test.jsonl"
     ids = [
         json.loads(line)["id"]
         for line in artifact.read_text(encoding="utf-8").splitlines()

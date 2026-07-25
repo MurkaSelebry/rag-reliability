@@ -281,7 +281,7 @@ def test_recomputation_fixes_known_mismatches() -> None:
     artifact = (
         Path(__file__).parents[1]
         / "predictions"
-        / "cloud"
+        / "pseudo_debug"
         / "m3"
         / "gepa_plain_s1"
         / "val.jsonl"

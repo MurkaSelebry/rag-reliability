@@ -128,7 +128,7 @@ def test_partial_migration_records_actual_count(tmp_path: Path) -> None:
 
 
 def test_real_surface_artifacts_migrate_without_value_drift(tmp_path: Path) -> None:
-    source = Path("predictions/local/baselines/surface")
+    source = Path("predictions/alfa/baselines/surface")
     root = tmp_path / "predictions"
     target = root / "local" / "baselines" / "surface"
     shutil.copytree(source, target)
