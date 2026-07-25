@@ -68,6 +68,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: полный корпус вместо синтетики; включается RUN_SLOW_TESTS=1",
+]
 
 [tool.ruff]
 line-length = 100
