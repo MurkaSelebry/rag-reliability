@@ -1,0 +1,148 @@
+{
+  "axes": {
+    "faithfulness_f1_macro": {
+      "above_noise": false,
+      "ci95": [
+        0.3981818181818182,
+        0.4312714776632303
+      ],
+      "null_percentile": 0.0,
+      "value": 0.41519434628975266
+    },
+    "relevance_f1_macro": {
+      "above_noise": false,
+      "ci95": [
+        0.4446308724832215,
+        0.4678456591639871
+      ],
+      "null_percentile": 8.0,
+      "value": 0.45737704918032784
+    }
+  },
+  "comparisons": [
+    {
+      "ci95": [
+        -0.2276971647901426,
+        -0.1201470045322755
+      ],
+      "delta": -0.17412390314387144,
+      "mcnemar": {
+        "b": 46,
+        "c": 34,
+        "p": 0.2185180394787037
+      },
+      "n_common": 331,
+      "p": 0.0,
+      "significant": true,
+      "vs": "baselines/surface"
+    },
+    {
+      "ci95": [
+        -0.21391607395814838,
+        -0.10320860759988405
+      ],
+      "delta": -0.1591555054889789,
+      "mcnemar": {
+        "b": 37,
+        "c": 31,
+        "p": 0.5446122234192591
+      },
+      "n_common": 331,
+      "p": 0.0,
+      "significant": true,
+      "vs": "m3/zero_shot"
+    }
+  ],
+  "diagnostics": {
+    "bootstrap_B": 10000,
+    "degenerate": {
+      "const_share": 1.0,
+      "is_degenerate": true,
+      "output_entropy": -0.0
+    },
+    "grid_step": 0.01,
+    "invalid_output_rate": 0.0,
+    "null_trials": 500,
+    "operating_threshold": 0.0,
+    "per_repeat_f1": [
+      0.4110320284697509,
+      0.4110320284697509,
+      0.4110320284697509,
+      0.4110320284697509,
+      0.4110320284697509
+    ],
+    "sd_across_repeats": 0.0,
+    "seed": 0,
+    "threshold_sd": 0.0,
+    "thresholds_per_fold": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "method": "baselines",
+  "operational": {
+    "base_rate_unreliable": 0.3021148036253776,
+    "confusion": {
+      "fn": 100,
+      "fp": 0,
+      "tn": 231,
+      "tp": 0
+    },
+    "flagged_share": 0.0,
+    "lift": 1.0,
+    "pr_auc_unreliable": 0.3021148036253776,
+    "recall_at_precision": {
+      "0.5": 0.0,
+      "0.6": 0.0,
+      "0.7": 0.0
+    },
+    "roc_auc": 0.5
+  },
+  "primary": {
+    "above_noise": false,
+    "ci95": [
+      0.3926605504587156,
+      0.4273356401384083
+    ],
+    "null_percentile": 0.0,
+    "value": 0.4110320284697509
+  },
+  "protocol": {
+    "corpus": "data/alfa.jsonl",
+    "corpus_sha256": "c386cd4e342463381ec74d4b6dd3539a22ea9eaae769fd1b2c910d4ca12f95b5",
+    "folds": "data/splits/folds_alfa.json",
+    "folds_sha256": "22e766097fa2551f6009ebbb1c3fbfd740ee201eb243c1b7ac19730e5ee3b69c",
+    "n_evaluated": 331,
+    "n_excluded": 115,
+    "n_folds": 5,
+    "n_missing_predictions": 1787,
+    "n_repeats": 5,
+    "score_expr": "p_faith * p_rel",
+    "scores": "predictions/alfa/baselines/majority/scores.jsonl"
+  },
+  "schema_version": 1,
+  "variant": "majority"
+}

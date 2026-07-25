@@ -1,0 +1,148 @@
+{
+  "axes": {
+    "faithfulness_f1_macro": {
+      "above_noise": true,
+      "ci95": [
+        0.5166781984761378,
+        0.6273055964767867
+      ],
+      "null_percentile": 99.2,
+      "value": 0.5725645409443653
+    },
+    "relevance_f1_macro": {
+      "above_noise": false,
+      "ci95": [
+        0.486770829396717,
+        0.5936089661257247
+      ],
+      "null_percentile": 94.0,
+      "value": 0.5394901515711952
+    }
+  },
+  "comparisons": [
+    {
+      "ci95": [
+        -0.05138244597872686,
+        0.08392831330417212
+      ],
+      "delta": 0.014968397654892551,
+      "mcnemar": {
+        "b": 46,
+        "c": 52,
+        "p": 0.613734467630139
+      },
+      "n_common": 331,
+      "p": 0.6576,
+      "significant": false,
+      "vs": "m3/zero_shot"
+    },
+    {
+      "ci95": [
+        0.12014700453227548,
+        0.22769716479014257
+      ],
+      "delta": 0.17412390314387144,
+      "mcnemar": {
+        "b": 34,
+        "c": 46,
+        "p": 0.2185180394787037
+      },
+      "n_common": 331,
+      "p": 0.0,
+      "significant": true,
+      "vs": "baselines/majority"
+    }
+  ],
+  "diagnostics": {
+    "bootstrap_B": 10000,
+    "degenerate": {
+      "const_share": 0.7522658610271903,
+      "is_degenerate": false,
+      "output_entropy": 1.1909506945425727
+    },
+    "grid_step": 0.01,
+    "invalid_output_rate": 0.0,
+    "null_trials": 500,
+    "operating_threshold": 0.18,
+    "per_repeat_f1": [
+      0.5796802587451295,
+      0.5691264925038154,
+      0.5839841996588563,
+      0.5820571761582543,
+      0.610931531002057
+    ],
+    "sd_across_repeats": 0.013872870478144186,
+    "seed": 0,
+    "threshold_sd": 0.029393876913398138,
+    "thresholds_per_fold": [
+      0.18,
+      0.24,
+      0.18,
+      0.24,
+      0.24,
+      0.18,
+      0.18,
+      0.24,
+      0.24,
+      0.18,
+      0.18,
+      0.18,
+      0.24,
+      0.24,
+      0.18,
+      0.18,
+      0.24,
+      0.18,
+      0.23,
+      0.24,
+      0.18,
+      0.18,
+      0.18,
+      0.24,
+      0.18
+    ]
+  },
+  "method": "baselines",
+  "operational": {
+    "base_rate_unreliable": 0.3021148036253776,
+    "confusion": {
+      "fn": 72,
+      "fp": 17,
+      "tn": 214,
+      "tp": 28
+    },
+    "flagged_share": 0.13595166163141995,
+    "lift": 1.5324481432234822,
+    "pr_auc_unreliable": 0.4629752698560369,
+    "recall_at_precision": {
+      "0.5": 0.3,
+      "0.6": 0.28,
+      "0.7": 0.01
+    },
+    "roc_auc": 0.6468831168831168
+  },
+  "primary": {
+    "above_noise": true,
+    "ci95": [
+      0.5355117957835395,
+      0.6353812898795759
+    ],
+    "null_percentile": 99.6,
+    "value": 0.5851559316136223
+  },
+  "protocol": {
+    "corpus": "data/alfa.jsonl",
+    "corpus_sha256": "c386cd4e342463381ec74d4b6dd3539a22ea9eaae769fd1b2c910d4ca12f95b5",
+    "folds": "data/splits/folds_alfa.json",
+    "folds_sha256": "22e766097fa2551f6009ebbb1c3fbfd740ee201eb243c1b7ac19730e5ee3b69c",
+    "n_evaluated": 331,
+    "n_excluded": 115,
+    "n_folds": 5,
+    "n_missing_predictions": 1787,
+    "n_repeats": 5,
+    "score_expr": "p_faith * p_rel",
+    "scores": "predictions/alfa/baselines/surface/scores.jsonl"
+  },
+  "schema_version": 1,
+  "variant": "surface"
+}
