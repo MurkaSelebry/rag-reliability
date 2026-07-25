@@ -229,7 +229,9 @@ _ALLOWED_NODES = (
 _KEY_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.")
 
 #: ``<method>.<signal>`` из контракта HANDOFF §7.1; сегмент не начинается с ``_``.
-_KEY_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]*\.[A-Za-z][A-Za-z0-9_]*")
+#: Всё остальное с точкой (``m3.p_faith.__class__``) ключом не считается и уходит
+#: в разбор как обращение к атрибуту — где его отвергает белый список узлов.
+_KEY_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+")
 
 
 @dataclass(frozen=True)
@@ -266,8 +268,10 @@ def _tokenize_keys(expression: str) -> tuple[str, dict[str, str]]:
         while index < len(expression) and expression[index] in _KEY_CHARS:
             index += 1
         token = expression[start:index]
-        if "." not in token or token.replace(".", "").isdigit():
-            rendered.append(token)  # число, в том числе дробное
+        if not _KEY_PATTERN.fullmatch(token):
+            # Число или что-то, что ключом не является: пусть разбирает ast.parse
+            # и отвергает белый список узлов.
+            rendered.append(token)
             continue
         name = f"_key{len(names)}"
         names[name] = token
@@ -284,14 +288,6 @@ def compile_score_expr(expression: str) -> ScoreExpression:
     if not expression.strip():
         raise ValueError("Score expression is empty")
     rendered, names = _tokenize_keys(expression)
-    # Ключ ищется в словаре, атрибуты не берутся никогда, но дандер в выражении —
-    # признак попытки дотянуться до интерпретатора, а не опечатки в имени сигнала.
-    suspicious = sorted(key for key in names.values() if not _KEY_PATTERN.fullmatch(key))
-    if suspicious:
-        raise ValueError(
-            f"Score expression {expression!r} references {suspicious} — score keys look like "
-            "'<method>.<signal>' and may not contain leading underscores"
-        )
     try:
         tree = ast.parse(rendered, mode="eval")
     except SyntaxError as exc:

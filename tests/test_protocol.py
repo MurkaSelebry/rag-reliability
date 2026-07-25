@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +34,21 @@ from rag_reliability.splits import sha256_file
 from rag_reliability.thresholds import macro_f1_binary, unit_interval_grid
 
 CHEAP = {"bootstrap_b": 200, "null_trials": 20}
+CHEAP_CLI = ["--bootstrap-B", "200", "--null-trials", "20"]
+
+
+def _load_cli():
+    spec = importlib.util.spec_from_file_location(
+        "evaluate_cv_script", Path(__file__).parents[1] / "scripts" / "evaluate_cv.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["evaluate_cv_script"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+cli = _load_cli()
 
 
 # --------------------------------------------------------------------------- #
@@ -508,6 +525,219 @@ def test_comparison_of_a_run_with_itself_has_zero_delta() -> None:
 
 def test_leakage_error_is_a_value_error_subclass() -> None:
     assert issubclass(LeakageError, ValueError)
+
+
+# --------------------------------------------------------------------------- #
+# CLI
+# --------------------------------------------------------------------------- #
+
+
+def write_corpus(path: Path, samples: list[RagSample]) -> Path:
+    path.write_text(
+        "".join(sample.model_dump_json() + "\n" for sample in samples), encoding="utf-8"
+    )
+    return path
+
+
+def write_scores(path: Path, predictions: list[Prediction]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(
+            json.dumps({"id": p.id, "scores": p.scores}, ensure_ascii=False) + "\n"
+            for p in predictions
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def cli_fixture(tmp_path: Path, n: int = 80, n_repeats: int = 2) -> dict[str, Path]:
+    samples, predictions = separable_corpus(n)
+    corpus = write_corpus(tmp_path / "corpus.jsonl", samples)
+    scores = write_scores(tmp_path / "predictions" / "alfa" / "m3" / "zero_shot" / "scores.jsonl",
+                          predictions)
+    folds = make_folds(
+        round_robin([sample.id for sample in samples], n_repeats=n_repeats),
+        n_repeats=n_repeats,
+        sha256=sha256_file(corpus),
+    )
+    folds_path = tmp_path / "folds.json"
+    folds_path.write_text(json.dumps(folds), encoding="utf-8")
+    return {"corpus": corpus, "scores": scores, "folds": folds_path, "output": tmp_path / "r.json"}
+
+
+def test_cli_writes_a_valid_report(tmp_path: Path) -> None:
+    paths = cli_fixture(tmp_path)
+
+    assert (
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(paths["scores"]),
+                "--score-expr", "m3.p_faith * m3.p_rel",
+                "--output", str(paths["output"]),
+                *CHEAP_CLI,
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(paths["output"].read_text(encoding="utf-8"))
+    assert payload["method"] == "m3" and payload["variant"] == "zero_shot"
+    assert payload["primary"]["ci95"][0] <= payload["primary"]["value"]
+    assert payload["primary"]["null_percentile"] is not None
+    assert payload["protocol"]["n_evaluated"] == 80
+    assert payload["protocol"]["corpus_sha256"] == sha256_file(paths["corpus"])
+
+
+def test_cli_is_deterministic(tmp_path: Path) -> None:
+    """Два прогона с тем же folds.json дают идентичный report.json."""
+    paths = cli_fixture(tmp_path)
+    argv = [
+        "--data", str(paths["corpus"]),
+        "--folds", str(paths["folds"]),
+        "--scores", str(paths["scores"]),
+        "--output", str(paths["output"]),
+        *CHEAP_CLI,
+    ]
+
+    cli.main(argv)
+    first = paths["output"].read_text(encoding="utf-8")
+    cli.main(argv)
+
+    assert paths["output"].read_text(encoding="utf-8") == first
+
+
+def test_cli_refuses_a_corpus_that_does_not_match_the_folds(tmp_path: Path) -> None:
+    paths = cli_fixture(tmp_path)
+    folds = json.loads(paths["folds"].read_text(encoding="utf-8"))
+    folds["corpus"]["sha256"] = "f" * 64
+    paths["folds"].write_text(json.dumps(folds), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="sha256 mismatch"):
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(paths["scores"]),
+                "--output", str(paths["output"]),
+                *CHEAP_CLI,
+            ]
+        )
+
+
+def test_cli_requires_allow_partial_for_uncovered_cases(tmp_path: Path) -> None:
+    paths = cli_fixture(tmp_path)
+    rows = paths["scores"].read_text(encoding="utf-8").splitlines()[:60]
+    paths["scores"].write_text("\n".join(rows) + "\n", encoding="utf-8")
+    argv = [
+        "--data", str(paths["corpus"]),
+        "--folds", str(paths["folds"]),
+        "--scores", str(paths["scores"]),
+        "--output", str(paths["output"]),
+        *CHEAP_CLI,
+    ]
+
+    with pytest.raises(ValueError, match="Missing predictions"):
+        cli.main(argv)
+
+    assert cli.main([*argv, "--allow-partial"]) == 0
+    payload = json.loads(paths["output"].read_text(encoding="utf-8"))
+    assert payload["protocol"]["n_missing_predictions"] == 20
+    assert payload["protocol"]["n_evaluated"] == 60
+
+
+def test_cli_rejects_an_injected_score_expression(tmp_path: Path) -> None:
+    paths = cli_fixture(tmp_path)
+
+    with pytest.raises(ValueError, match="Call"):
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(paths["scores"]),
+                "--score-expr", "__import__('os').system('id')",
+                "--output", str(paths["output"]),
+                *CHEAP_CLI,
+            ]
+        )
+
+
+def test_cli_records_a_paired_comparison(tmp_path: Path) -> None:
+    paths = cli_fixture(tmp_path)
+    rival = write_scores(
+        tmp_path / "predictions" / "alfa" / "baselines" / "surface" / "scores.jsonl",
+        [
+            Prediction(
+                id=f"case_{index:04d}",
+                faithfulness_pred=0,
+                relevance_pred=0,
+                scores={"surf.p_faith": 0.5, "surf.p_rel": 0.5},
+            )
+            for index in range(80)
+        ],
+    )
+
+    cli.main(
+        [
+            "--data", str(paths["corpus"]),
+            "--folds", str(paths["folds"]),
+            "--scores", str(paths["scores"]),
+            "--compare", str(rival),
+            "--output", str(paths["output"]),
+            *CHEAP_CLI,
+        ]
+    )
+
+    payload = json.loads(paths["output"].read_text(encoding="utf-8"))
+    assert len(payload["comparisons"]) == 1
+    comparison = payload["comparisons"][0]
+    assert comparison["vs"] == "baselines/surface"
+    assert comparison["n_common"] == 80
+    assert set(comparison) >= {"delta", "ci95", "p", "significant"}
+
+
+def test_cli_infers_method_and_variant_from_the_artifact_path(tmp_path: Path) -> None:
+    path = tmp_path / "predictions" / "alfa" / "m6" / "base" / "scores.jsonl"
+    assert cli.infer_method_variant(path) == ("m6", "base")
+
+
+def test_cli_reads_pre_a3_artifacts_without_a_scores_block(tmp_path: Path) -> None:
+    path = tmp_path / "val.jsonl"
+    path.write_text('{"id": "case_0000", "p_faith": 0.7, "p_rel": 0.4}\n', encoding="utf-8")
+
+    [prediction] = cli.load_scores(path)
+
+    assert prediction.scores == {"legacy.p_faith": 0.7, "legacy.p_rel": 0.4}
+
+
+def test_cli_rejects_a_scores_row_without_probabilities(tmp_path: Path) -> None:
+    path = tmp_path / "scores.jsonl"
+    path.write_text('{"id": "case_0000", "meta": {}}\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="neither 'scores' nor"):
+        cli.load_scores(path)
+
+
+def test_cli_reports_an_artifact_from_another_corpus(tmp_path: Path) -> None:
+    paths = cli_fixture(tmp_path, n=20)
+    foreign = write_scores(
+        tmp_path / "predictions" / "alfa" / "m3" / "foreign" / "scores.jsonl",
+        [make_prediction(f"organizer_{index:06d}", 0.5, 0.5) for index in range(20)],
+    )
+
+    with pytest.raises(ValueError, match="another corpus"):
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(foreign),
+                "--output", str(paths["output"]),
+                "--allow-partial",
+                *CHEAP_CLI,
+            ]
+        )
 
 
 @pytest.mark.parametrize(
