@@ -8,9 +8,9 @@ method:
   - ind.rel_score
   default_score_expr: ind.faith_score * ind.rel_score
   corpus_wide: true
-variant: rule_based
+variant: independent
 config:
-  data: data/organizers.jsonl
+  data: data/alfa.jsonl
   direct_adapter_path: results/adapters_direct
   flush_every: '20'
   independent_faithfulness_threshold: '0.2'
@@ -34,16 +34,13 @@ config:
   resume: 'False'
   run_yaml: None
   seed: '0'
-  variant: rule_based
+  variant: independent
 git:
-  hash: 99e0f0b
+  hash: 739887c
   dirty: true
   changed:
-  - scripts/score.py
-  - src/rag_reliability/methods/registry.py
-  - tests/test_registry.py
-  - tests/test_score_cli.py
+  - predictions/alfa/baselines/independent/scores.jsonl
 seed: 0
-n: 2245
+n: 2233
 partial: false
-timestamp: '2026-07-25T21:28:50+00:00'
+timestamp: '2026-07-25T23:29:41+00:00'
