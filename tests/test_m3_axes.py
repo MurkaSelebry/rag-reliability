@@ -180,6 +180,43 @@ def test_axis_pass_prob_is_monotone_in_the_verdict_logprob(axis: str) -> None:
     assert unsure == pytest.approx(0.5)
 
 
+@pytest.mark.parametrize("expected", [0.905, 0.5, 0.081])
+def test_axis_pass_prob_matches_an_independent_oracle(expected: float) -> None:
+    """Оракул считается вручную, а не вторым путём того же кода.
+
+    Прецедент, который этот тест закрывает: тест на logprobs требовал 0.475
+    от токена с P(PASS)=0.905 и три ветки держал баг зелёным. Здесь ожидание
+    выводится из определения: softmax по паре PASS/FAIL, а односторонний
+    top-logprob — это уже абсолютная вероятность, её надо экспоненцировать.
+    """
+    import math  # noqa: PLC0415
+
+    anchor = axis_anchor(AXIS_FAITHFULNESS)
+    both_sides = [
+        {"token": anchor, "logprob": -0.1, "top": {}},
+        {"token": ":", "logprob": -0.1, "top": {}},
+        {
+            "token": " PASS",
+            "logprob": math.log(expected),
+            "top": {
+                " PASS": math.log(expected),
+                " FAIL": math.log(1.0 - expected),
+            },
+        },
+    ]
+    one_sided = [
+        *both_sides[:2],
+        {
+            "token": " PASS",
+            "logprob": math.log(expected),
+            "top": {" PASS": math.log(expected)},
+        },
+    ]
+
+    assert axis_pass_prob(both_sides, AXIS_FAITHFULNESS) == pytest.approx(expected)
+    assert axis_pass_prob(one_sided, AXIS_FAITHFULNESS) == pytest.approx(expected)
+
+
 def test_axis_pass_prob_matches_the_two_axis_extractor() -> None:
     """Одноосевой путь обязан совпадать с двухосевым на общем потоке токенов."""
     tokens = _verdict_tokens(AXIS_FAITHFULNESS, -0.1, -2.4) + [
@@ -300,11 +337,44 @@ def test_run_m3_axes_makes_two_calls_per_case_and_writes_selfconsistency_scores(
         assert 0.0 <= row["scores"]["m3.p_faith_std"] <= 0.5
 
 
-def test_run_m3_axes_rejects_backends_without_a_chat_client(tmp_path: Path) -> None:
+def test_axes_is_the_default_prompt_style_of_the_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Одноосевой путь должен быть основным, а не opt-in."""
+    import sys  # noqa: PLC0415
+
+    run_m3 = _load_run_m3()
+    monkeypatch.setattr(sys, "argv", ["run_m3.py"])
+
+    assert run_m3.parse_args().prompt_style == "axes"
+
+
+def test_text_backends_reach_the_axes_path_through_an_adapter() -> None:
+    """mlx/openai не отдают логпробы, но ось не должна быть им недоступна."""
+    run_m3 = _load_run_m3()
+    seen: list[tuple[int, float]] = []
+
+    def generate(system: str, user: str, max_tokens: int, temperature: float) -> str:
+        seen.append((max_tokens, temperature))
+        return "ANALYSIS: разбор\nMARKER: none\nRELEVANCE: FAIL"
+
+    client = run_m3.TextAxisClient(generate)
+    choices = client.chat(
+        [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}],
+        n=3,
+        max_tokens=128,
+        temperature=0.7,
+        logprobs=True,
+    )
+
+    assert len(choices) == 3
+    assert all(choice["tokens"] == [] for choice in choices)  # регекс-ветка цепочки
+    assert seen == [(128, 0.7)] * 3
+
+
+def test_unknown_backend_has_no_axis_client(tmp_path: Path) -> None:
     run_m3 = _load_run_m3()
 
-    with pytest.raises(ValueError, match="supports backends"):
-        run_m3.build_axis_client(_axes_args(tmp_path, backend="mlx"))
+    with pytest.raises(ValueError, match="no client for backend"):
+        run_m3.build_axis_client(_axes_args(tmp_path, backend="telepathy"))
 
 
 def test_run_m3_ablation_builds_the_quality_cost_table(

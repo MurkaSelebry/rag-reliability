@@ -150,6 +150,62 @@ def test_missing_samples_are_not_silently_dropped() -> None:
         judge_selfconsistent(client, "sys", "usr", axis=AXIS_RELEVANCE, n=4)
 
 
+def test_samples_are_cached_per_axis_and_reused(tmp_path) -> None:
+    """Сэмплирование судьи — самая дорогая операция метода; перезапуск должен
+    продолжать, а не пересчитывать."""
+    choices = [_choice(AXIS_RELEVANCE, "PASS", -0.1, -2.0)] * 4
+    first = FakeClient(choices)
+    second = FakeClient(choices)
+
+    warm = judge_selfconsistent(
+        first, "sys", "usr", axis=AXIS_RELEVANCE, n=4, cache_dir=tmp_path, cache_scope="model|url"
+    )
+    hit = judge_selfconsistent(
+        second, "sys", "usr", axis=AXIS_RELEVANCE, n=4, cache_dir=tmp_path, cache_scope="model|url"
+    )
+
+    assert len(first.calls) == 1
+    assert second.calls == []  # второй прогон не ходил в модель
+    assert hit[f"{AXIS_RELEVANCE}.p"] == warm[f"{AXIS_RELEVANCE}.p"]
+    assert len(list(tmp_path.glob("*.json"))) == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("axis", AXIS_FAITHFULNESS), ("n", 2), ("temperature", 1.0), ("cache_scope", "other")],
+)
+def test_cache_key_separates_runs_that_are_not_interchangeable(tmp_path, field, value) -> None:
+    base = {
+        "axis": AXIS_RELEVANCE,
+        "n": 4,
+        "temperature": 0.7,
+        "cache_dir": tmp_path,
+        "cache_scope": "model|url",
+    }
+    choices = [_choice(AXIS_RELEVANCE, "PASS", -0.1, -2.0)] * 4
+
+    judge_selfconsistent(FakeClient(choices), "sys", "usr", **base)
+    second = FakeClient([_choice(value if field == "axis" else AXIS_RELEVANCE, "PASS", -0.1, -2.0)] * 4)
+    judge_selfconsistent(second, "sys", "usr", **(base | {field: value}))
+
+    assert len(second.calls) == 1  # ключи различаются, кэш не переиспользован
+    assert len(list(tmp_path.glob("*.json"))) == 2
+
+
+def test_corrupted_cache_entry_counts_as_a_miss(tmp_path) -> None:
+    choices = [_choice(AXIS_RELEVANCE, "PASS", -0.1, -2.0)] * 2
+    judge_selfconsistent(
+        FakeClient(choices), "sys", "usr", axis=AXIS_RELEVANCE, n=2, cache_dir=tmp_path
+    )
+    entry = next(iter(tmp_path.glob("*.json")))
+    entry.write_text("{ oborvano", encoding="utf-8")
+
+    client = FakeClient(choices)
+    judge_selfconsistent(client, "sys", "usr", axis=AXIS_RELEVANCE, n=2, cache_dir=tmp_path)
+
+    assert len(client.calls) == 1
+
+
 def test_sample_axis_rejects_non_positive_n() -> None:
     with pytest.raises(ValueError, match="n must be >= 1"):
         sample_axis(FakeClient([]), "sys", "usr", axis=AXIS_RELEVANCE, n=0)

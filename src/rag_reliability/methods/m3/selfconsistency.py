@@ -15,10 +15,13 @@ AUC, ранжировать нечего. N сэмплов при T>0 дают �
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import statistics
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from rag_reliability.methods.m3.axes import extract_axis_verdict
@@ -27,7 +30,46 @@ logger = logging.getLogger(__name__)
 
 AGGREGATIONS: tuple[str, ...] = ("mean_prob", "vote_share", "median_prob")
 
+# Версия одноосевого экстрактора: попадает в ключ кэша, как EXTRACTOR_VERSION
+# у judge_client, чтобы старые записи не читались новым кодом молча.
+AXIS_EXTRACTOR_VERSION = 1
+
 _NO_VOTES_FALLBACK = 0.5
+
+
+def _cache_path(cache_dir: Path, payload: Mapping[str, Any]) -> Path:
+    encoded = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True).encode("utf-8")
+    return cache_dir / f"{hashlib.sha256(encoded).hexdigest()}.json"
+
+
+def _cache_read(path: Path | None, n: int) -> list[dict] | None:
+    """Сырые ответы модели из кэша; неполная или битая запись — промах."""
+    if path is None or not path.exists():
+        return None
+    try:
+        choices = json.loads(path.read_text(encoding="utf-8"))["choices"]
+    except (json.JSONDecodeError, KeyError, TypeError, OSError):
+        return None
+    if not isinstance(choices, list) or len(choices) != n:
+        return None
+    required = ("text", "tokens", "finish_reason")
+    if any(
+        not isinstance(choice, dict) or any(key not in choice for key in required)
+        for choice in choices
+    ):
+        return None
+    return choices
+
+
+def _cache_write(path: Path | None, choices: Sequence[dict]) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(
+        json.dumps({"choices": list(choices)}, ensure_ascii=False), encoding="utf-8"
+    )
+    tmp.replace(path)  # atomic replace — прерывание не оставит битую запись
 
 
 @dataclass(frozen=True)
@@ -91,16 +133,43 @@ def sample_axis(
     temperature: float = 0.7,
     max_tokens: int = 800,
     top_p: float = 1.0,
+    cache_dir: str | Path | None = None,
+    cache_scope: str = "",
 ) -> list[tuple[float, dict]]:
     """N сэмплов одной оси -> список (вероятность PASS, meta) в порядке ответа.
 
     Отдельная функция, потому что абляции по N нужны СЫРЫЕ сэмплы: N=16
     сэмплируется один раз, а точки N=1,4,8 считаются по префиксам того же
     набора, без повторных вызовов модели.
+
+    Кэшируются сырые ответы модели, а не вероятности: смена экстрактора не
+    требует перегенерации. ``cache_scope`` описывает бэкенд (модель, endpoint),
+    чтобы записи разных моделей не пересекались.
     """
     if n < 1:
         raise ValueError(f"n must be >= 1 for axis {axis!r}, got {n}")
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    path = (
+        _cache_path(
+            Path(cache_dir),
+            {
+                "axis": axis,
+                "extractor_version": AXIS_EXTRACTOR_VERSION,
+                "max_tokens": max_tokens,
+                "n": n,
+                "scope": cache_scope,
+                "system": system,
+                "temperature": temperature,
+                "top_p": top_p,
+                "user": user,
+            },
+        )
+        if cache_dir is not None
+        else None
+    )
+    cached = _cache_read(path, n)
+    if cached is not None:
+        return _verdicts(cached, axis)
     try:
         choices = client.chat(
             messages,
@@ -126,6 +195,11 @@ def sample_axis(
             f"Judge returned {len(choices)} choice(s) for axis {axis!r} at n={n}: "
             "a sample would be silently dropped"
         )
+    _cache_write(path, choices)
+    return _verdicts(choices, axis)
+
+
+def _verdicts(choices: Sequence[dict], axis: str) -> list[tuple[float, dict]]:
     return [
         extract_axis_verdict(
             choice["text"],
@@ -147,6 +221,8 @@ def judge_selfconsistent(
     temperature: float = 0.7,
     max_tokens: int = 800,
     top_p: float = 1.0,
+    cache_dir: str | Path | None = None,
+    cache_scope: str = "",
 ) -> dict:
     """N сэмплов -> усреднение вероятностей + доля PASS-голосов.
 
@@ -168,6 +244,8 @@ def judge_selfconsistent(
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
+        cache_dir=cache_dir,
+        cache_scope=cache_scope,
     )
     probs = [probability for probability, _ in samples]
     metas = [meta for _, meta in samples]

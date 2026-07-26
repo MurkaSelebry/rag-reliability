@@ -19,6 +19,7 @@ import json
 import math
 import os
 from collections import Counter
+from collections.abc import Callable
 from typing import Any
 
 from tqdm import tqdm
@@ -76,8 +77,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prompt-style",
         choices=["joint", "axes"],
-        default="joint",
-        help="joint = один вызов на оба вердикта; axes = отдельный вызов на ось",
+        default="axes",
+        help="axes (по умолчанию) = отдельный вызов на ось; joint = прежний общий вызов",
     )
     parser.add_argument("--prompts-dir", default="configs/prompts")
     parser.add_argument("--prompt-file-faithfulness", default=None, help="--mode gepa, ось faith")
@@ -99,7 +100,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ablation-temperature", default="0.7,1.0", help="сетка T через запятую")
     parser.add_argument("--ablation-out", default=None, help="куда писать таблицу качество/цена")
     parser.add_argument(
-        "--ablation-replicates", type=int, default=2000, help="реплик бутстрэпа для 95% ДИ"
+        # %% — argparse прогоняет help через %-форматирование.
+        "--ablation-replicates", type=int, default=2000, help="реплик бутстрэпа для 95%% ДИ"
     )
     return parser.parse_args()
 
@@ -108,8 +110,10 @@ def _flag(args: argparse.Namespace, name: str, default: Any) -> Any:
     """Мягкое чтение новых флагов.
 
     ``main()`` вызывают не только из CLI, но и с Namespace, собранным вручную
-    (tests/test_m3_method.py), поэтому отсутствие нового флага означает старый
-    путь, а не ошибку. К фичам и вероятностям это послабление не относится.
+    (tests/test_m3_method.py), поэтому отсутствие нового флага означает значение
+    по умолчанию, а не ошибку. Значения совпадают с argparse, чтобы у CLI и у
+    ручного вызова не расходилось поведение. К фичам и вероятностям это
+    послабление не относится.
     """
     return getattr(args, name, default)
 
@@ -224,24 +228,85 @@ class DummyAxisClient:
         return choices
 
 
+class TextAxisClient:
+    """Адаптер текстовых бэкендов (mlx, openai) под контракт ``chat()``.
+
+    Логпробов эти бэкенды не отдают, поэтому вероятность придёт из regex-ветки
+    цепочки (0.9/0.1) — грубее, чем logprobs, но ось не теряется и кейс не
+    выпадает. Нужен, чтобы одноосевой путь был доступен на всех бэкендах, на
+    которых работал общий, а не только на openai_judge.
+    """
+
+    def __init__(self, generate: Callable[[str, str, int, float], str]) -> None:
+        self._generate = generate
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float = 0.0,
+        n: int = 1,
+        max_tokens: int = 512,
+        top_p: float = 1.0,
+        logprobs: bool = False,
+    ) -> list[dict]:
+        system, user = messages[0]["content"], messages[-1]["content"]
+        return [
+            {
+                "text": self._generate(system, user, max_tokens, temperature),
+                "tokens": [],
+                "finish_reason": "stop",
+            }
+            for _ in range(n)
+        ]
+
+
 def build_axis_client(args: argparse.Namespace) -> Any:
-    """Клиент для одноосевого пути: реальный судья или сетевой стенд."""
+    """Клиент для одноосевого пути: судья с логпробами, текстовый бэкенд или стенд."""
     if args.backend == "dummy":
         return DummyAxisClient()
     if args.backend == "openai_judge":
         from rag_reliability.methods.m3.judge_client import JudgeClient  # noqa: PLC0415
 
-        # Файловый кэш JudgeClient обслуживает только judge(); одноосевые вызовы
-        # идут через публичный chat() и не кэшируются (см. PR: требуется от A4).
         return JudgeClient(
             model=args.model,
             api_base=args.api_base,
             api_key=os.environ.get(args.api_key_env, ""),
             cache_dir=args.cache_dir,
         )
+    if args.backend == "openai":
+        from rag_reliability.methods.m3.openai_client import CachedChatClient  # noqa: PLC0415
+
+        chat_client = CachedChatClient(
+            model=args.model,
+            api_base=args.api_base,
+            api_key=os.environ.get(args.api_key_env, ""),
+            cache_dir=args.cache_dir,
+        )
+        return TextAxisClient(
+            lambda system, user, max_tokens, temperature: chat_client.chat(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+        )
+    if args.backend == "mlx":
+        generate_fn = make_generate_fn(args.model, args.max_tokens)
+        return TextAxisClient(
+            lambda system, user, max_tokens, temperature: generate_fn(f"{system}\n\n{user}")
+        )
     raise ValueError(
-        f"--prompt-style axes supports backends 'openai_judge' and 'dummy', got {args.backend!r}"
+        f"--prompt-style axes has no client for backend {args.backend!r}; "
+        "expected one of 'openai_judge', 'openai', 'mlx', 'dummy'"
     )
+
+
+def _cache_scope(args: argparse.Namespace) -> str:
+    """Идентичность бэкенда в ключе кэша одноосевых вызовов."""
+    return f"{args.model}|{args.api_base}|{args.backend}"
 
 
 def _axis_prompt_file(args: argparse.Namespace, axis: str) -> str | None:
@@ -332,6 +397,8 @@ def run_axes(args: argparse.Namespace, samples: list) -> list[Prediction]:
                 n=n,
                 temperature=temperature,
                 max_tokens=args.max_tokens,
+                cache_dir=args.cache_dir,
+                cache_scope=_cache_scope(args),
             )
         predictions.append(_axes_prediction(sample.id, results, versions))
     return predictions
@@ -376,6 +443,8 @@ def run_ablation(args: argparse.Namespace, samples: list) -> dict:
                     n=n_max,
                     temperature=temperature,
                     max_tokens=args.max_tokens,
+                    cache_dir=args.cache_dir,
+                    cache_scope=_cache_scope(args),
                 )
                 records.append(
                     AblationRecord(
@@ -426,7 +495,7 @@ def main() -> None:
             write_run_meta(args.run_meta, args)
         return
 
-    if _flag(args, "prompt_style", "joint") == "axes":
+    if _flag(args, "prompt_style", "axes") == "axes":
         predictions = run_axes(args, samples)
         save_jsonl(predictions, args.output)
         invalid = sum(prediction.invalid_output for prediction in predictions)
