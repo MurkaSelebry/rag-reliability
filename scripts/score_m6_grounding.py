@@ -272,6 +272,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # поэтому счётчики едут в run.yaml вместе с конфигом.
         args.nli_pairs = getattr(nli, "n_pairs", None)
         args.nli_windows = getattr(nli, "n_windows", None)
+        # Фактические device и dtype: на CUDA скорер берёт fp16, на CPU fp32, и
+        # скоры от этого отличаются. Артефакт без этой пометки нельзя сравнивать
+        # с артефактом другого прогона — и нельзя дописывать через --resume.
+        args.resolved_device = getattr(nli, "device", None)
+        args.resolved_dtype = str(getattr(getattr(nli, "model", None), "dtype", None))
         run_yaml = Path(args.run_yaml) if args.run_yaml else Path(args.output).parent / "run.yaml"
         score_cli.write_run_yaml(
             run_yaml, args, SPEC, n=n, partial=len(samples) < n_corpus
