@@ -219,6 +219,114 @@ def test_extract_axis_verdict_fallback_chain() -> None:
     assert meta["truncated"] is True
 
 
+def _load_run_m3():
+    import importlib.util  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    spec = importlib.util.spec_from_file_location("run_m3", REPO_ROOT / "scripts" / "run_m3.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["run_m3"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _axes_args(tmp_path: Path, **overrides):
+    import argparse  # noqa: PLC0415
+
+    defaults = {
+        "data": str(REPO_ROOT / "data" / "dummy.jsonl"),
+        "output": str(tmp_path / "predictions.jsonl"),
+        "mode": "zero_shot",
+        "examples": None,
+        "prompt_file": None,
+        "backend": "dummy",
+        "dummy_strategy": "always_reliable",
+        "model": "dummy-model",
+        "api_base": "http://localhost:8000/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "cache_dir": None,
+        "run_meta": None,
+        "max_tokens": 200,
+        "max_context_chars": None,
+        "limit": 3,
+        "concurrency": 1,
+        "prompt_style": "axes",
+        "prompts_dir": str(PROMPTS_DIR),
+        "prompt_file_faithfulness": None,
+        "prompt_file_relevance": None,
+        "sc_n": 4,
+        "sc_temperature": 0.7,
+        "ablation_n": None,
+        "ablation_temperature": "0.7",
+        "ablation_out": None,
+        "ablation_replicates": 200,
+    }
+    return argparse.Namespace(**(defaults | overrides))
+
+
+def test_run_m3_axes_makes_two_calls_per_case_and_writes_selfconsistency_scores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json  # noqa: PLC0415
+
+    run_m3 = _load_run_m3()
+    args = _axes_args(tmp_path)
+    monkeypatch.setattr(run_m3, "parse_args", lambda: args)
+    client = run_m3.DummyAxisClient()
+    monkeypatch.setattr(run_m3, "build_axis_client", lambda _: client)
+
+    run_m3.main()
+
+    rows = [
+        json.loads(line)
+        for line in Path(args.output).read_text(encoding="utf-8").splitlines()
+    ]
+    assert len(rows) == 3
+    assert [call["anchor"] for call in client.calls[:2]] == ["FAITHFULNESS", "RELEVANCE"]
+    assert len(client.calls) == 2 * len(rows)  # ровно два вызова на кейс
+    assert all(call["n"] == 4 for call in client.calls)
+    for row in rows:
+        assert set(row["scores"]) == {
+            "m3.p_faith",
+            "m3.p_faith_vote",
+            "m3.p_faith_std",
+            "m3.p_rel",
+            "m3.p_rel_vote",
+            "m3.p_rel_std",
+        }
+        assert row["prob_method"] == "logprobs"
+        assert row["marker_pred"] is not None
+        assert 0.0 <= row["scores"]["m3.p_faith_std"] <= 0.5
+
+
+def test_run_m3_axes_rejects_backends_without_a_chat_client(tmp_path: Path) -> None:
+    run_m3 = _load_run_m3()
+
+    with pytest.raises(ValueError, match="supports backends"):
+        run_m3.build_axis_client(_axes_args(tmp_path, backend="mlx"))
+
+
+def test_run_m3_ablation_builds_the_quality_cost_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import json  # noqa: PLC0415
+
+    run_m3 = _load_run_m3()
+    out = tmp_path / "ablation.json"
+    args = _axes_args(tmp_path, limit=None, ablation_n="1,2", ablation_out=str(out))
+    monkeypatch.setattr(run_m3, "parse_args", lambda: args)
+    monkeypatch.setattr(run_m3, "build_axis_client", lambda _: run_m3.DummyAxisClient())
+
+    run_m3.main()
+
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["config"]["ns"] == [1, 2]
+    assert {row["n"] for row in report["rows"]} == {1, 2}
+    assert {row["axis"] for row in report["rows"]} == set(AXES)
+    assert report["markdown"].startswith("| ось |")
+
+
 def test_foreign_m3_files_are_untouched() -> None:
     """Владение файлами: C3 не имеет права менять код A4 и D2."""
     base = subprocess.run(

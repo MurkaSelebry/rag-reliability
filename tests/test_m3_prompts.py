@@ -158,6 +158,64 @@ def test_relevance_prompt_is_cheaper_than_faithfulness_prompt() -> None:
     assert len(rel_user) < len(faith_user)
 
 
+def test_prompt_version_reaches_predictions_and_run_meta(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Версия промпта обязана дожить до артефактов: иначе не восстановить,
+    какой именно текст дал числа."""
+    import argparse  # noqa: PLC0415
+    import importlib.util  # noqa: PLC0415
+    import json  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    spec = importlib.util.spec_from_file_location("run_m3", REPO_ROOT / "scripts" / "run_m3.py")
+    assert spec is not None and spec.loader is not None
+    run_m3 = importlib.util.module_from_spec(spec)
+    sys.modules["run_m3"] = run_m3
+    spec.loader.exec_module(run_m3)
+
+    output = tmp_path / "predictions.jsonl"
+    run_meta = tmp_path / "run.yaml"
+    args = argparse.Namespace(
+        data=str(REPO_ROOT / "data" / "dummy.jsonl"),
+        output=str(output),
+        mode="zero_shot",
+        examples=None,
+        prompt_file=None,
+        backend="dummy",
+        dummy_strategy="always_reliable",
+        model="dummy-model",
+        api_base="http://localhost:8000/v1",
+        api_key_env="OPENAI_API_KEY",
+        cache_dir=None,
+        run_meta=str(run_meta),
+        max_tokens=200,
+        max_context_chars=None,
+        limit=2,
+        concurrency=1,
+        prompt_style="axes",
+        prompts_dir=str(PROMPTS_DIR),
+        prompt_file_faithfulness=None,
+        prompt_file_relevance=None,
+        sc_n=1,
+        sc_temperature=0.0,
+        ablation_n=None,
+        ablation_temperature="0.7",
+        ablation_out=None,
+        ablation_replicates=200,
+    )
+    monkeypatch.setattr(run_m3, "parse_args", lambda: args)
+
+    run_m3.main()
+
+    expected = prompt_versions(prompts_dir=PROMPTS_DIR, markers_path=MARKERS_PATH)
+    first = json.loads(output.read_text(encoding="utf-8").splitlines()[0])
+    assert json.loads(first["raw_output"])["prompt_versions"] == expected
+    assert expected[AXIS_RELEVANCE] in json.loads(run_meta.read_text(encoding="utf-8"))["args"][
+        "prompt_versions"
+    ]
+
+
 def test_marker_checklist_rejects_unknown_code() -> None:
     with pytest.raises(ValueError, match="absent from the taxonomy"):
         build_marker_checklist(["reason_not_a_real_code"], load_markers(MARKERS_PATH))
