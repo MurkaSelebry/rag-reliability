@@ -145,7 +145,34 @@ class OofResult:
 
     @property
     def collapsed(self) -> bool:
-        return is_collapsed(self.logits)
+        return self.collapse_reason is not None
+
+    @property
+    def collapsed_folds(self) -> list[int]:
+        """Фолды, чья модель на последней эпохе выдала один класс на всём held-out."""
+        last: dict[int, EpochLog] = {}
+        for log in self.epochs:
+            previous = last.get(log.fold)
+            if previous is None or log.epoch >= previous.epoch:
+                last[log.fold] = log
+        return sorted(fold for fold, log in last.items() if log.is_degenerate)
+
+    @property
+    def collapse_reason(self) -> str | None:
+        """Почему прогон считается схлопнувшимся — или ``None``, если не считается.
+
+        Одного взгляда на склеенный OOF мало. Модели фолдов инициализируются
+        по-разному, и прогон, где каждый фолд предсказал ровно один класс, но
+        разные фолды — разные классы, даёт вполне приличный общий ``const_share``.
+        Обучения при этом не было ни в одном фолде. Смоук на крошечной модели
+        воспроизвёл ровно этот случай: 3 фолда по const_share = 1.0, пул 0.67.
+        """
+        if is_collapsed(self.logits):
+            return "pooled"
+        trained = {log.fold for log in self.epochs}
+        if trained and len(self.collapsed_folds) == len(trained):
+            return "per_fold"
+        return None
 
     def diagnostics(self) -> dict[str, Any]:
         summary = degenerate_rate(decisions_from_logits(self.logits))
@@ -153,7 +180,9 @@ class OofResult:
             "n_scored": len(self.logits),
             "repeat": self.repeat,
             "n_repeats": self.n_repeats,
-            "collapsed": bool(summary["is_degenerate"]),
+            "collapsed": self.collapsed,
+            "collapse_reason": self.collapse_reason,
+            "collapsed_folds": self.collapsed_folds,
             "const_share": float(summary["const_share"]),
             "output_entropy": float(summary["output_entropy"]),
             "epochs": [log.as_dict() for log in self.epochs],
@@ -333,8 +362,11 @@ def train_oof_detailed(
         )
     if result.collapsed:
         logger.warning(
-            "run collapsed: const_share=%.4f — configuration is excluded from best-config choice",
-            result.diagnostics()["const_share"],
+            "run collapsed (%s): const_share=%.4f, collapsed folds %s — configuration is "
+            "excluded from best-config choice",
+            result.collapse_reason,
+            float(degenerate_rate(decisions_from_logits(result.logits))["const_share"]),
+            result.collapsed_folds,
         )
     return result
 

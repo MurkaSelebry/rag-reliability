@@ -243,6 +243,82 @@ def test_a_run_that_predicts_one_class_everywhere_is_marked_collapsed() -> None:
     assert all(log.is_degenerate for log in result.epochs)
 
 
+def test_a_run_where_every_fold_predicts_one_class_is_collapsed() -> None:
+    """Пул может выглядеть здоровым, когда разные фолды схлопнулись в разные классы.
+
+    Воспроизведено смоуком на крошечной модели: три фолда с const_share = 1.0
+    каждый, а склеенный OOF — 0.67. Обучения не было ни в одном фолде.
+    """
+    samples = make_corpus()
+
+    def per_fold_constant(request: FoldRequest) -> FoldOutcome:
+        # Чётные фолды — «всё надёжно», нечётные — «всё ненадёжно».
+        logit = 5.0 if request.fold % 2 == 0 else -5.0
+        logits = [logit] * len(request.test_samples)
+        for epoch in range(1, request.config.n_epochs + 1):
+            request.on_epoch_end(epoch, logits)
+        return FoldOutcome(logits=tuple(logits))
+
+    result = train_oof_detailed(
+        samples, make_folds(samples), TrainConfig(), train_fold=per_fold_constant
+    )
+
+    assert result.diagnostics()["const_share"] < 0.98  # пул выглядит приличным
+    assert result.collapsed is True
+    assert result.collapse_reason == "per_fold"
+    assert result.collapsed_folds == [0, 1, 2, 3, 4]
+
+
+def test_a_pooled_collapse_is_named_as_such() -> None:
+    samples = make_corpus()
+
+    result = train_oof_detailed(
+        samples, make_folds(samples), TrainConfig(), train_fold=RecordingTrainer(logit=5.0)
+    )
+
+    assert result.collapse_reason == "pooled"
+
+
+def test_a_single_collapsed_fold_does_not_condemn_the_whole_run() -> None:
+    """Один плохой фолд — повод посмотреть в лог, а не выбросить конфигурацию."""
+    samples = make_corpus()
+
+    def one_bad_fold(request: FoldRequest) -> FoldOutcome:
+        if request.fold == 0:
+            logits = [5.0] * len(request.test_samples)
+        else:
+            logits = [1.0 if index % 2 else -1.0 for index in range(len(request.test_samples))]
+        for epoch in range(1, request.config.n_epochs + 1):
+            request.on_epoch_end(epoch, logits)
+        return FoldOutcome(logits=tuple(logits))
+
+    result = train_oof_detailed(
+        samples, make_folds(samples), TrainConfig(), train_fold=one_bad_fold
+    )
+
+    assert result.collapsed is False
+    assert result.collapsed_folds == [0]
+
+
+def test_collapsed_folds_are_judged_by_the_last_epoch() -> None:
+    """Схлопывание на первой эпохе, из которого модель вышла, — не приговор."""
+    samples = make_corpus()
+
+    def recovers(request: FoldRequest) -> FoldOutcome:
+        constant = [5.0] * len(request.test_samples)
+        mixed = [1.0 if index % 2 else -1.0 for index in range(len(request.test_samples))]
+        request.on_epoch_end(1, constant)
+        request.on_epoch_end(2, mixed)
+        return FoldOutcome(logits=tuple(mixed))
+
+    result = train_oof_detailed(
+        samples, make_folds(samples), TrainConfig(epochs=2), train_fold=recovers
+    )
+
+    assert result.collapsed_folds == []
+    assert result.collapsed is False
+
+
 def test_a_run_with_a_mixed_output_is_not_collapsed() -> None:
     samples = make_corpus()
 

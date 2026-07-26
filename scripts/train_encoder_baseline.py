@@ -146,6 +146,8 @@ def _append_encoder_meta(
         "n_repeats": 1,
         "repeat": diagnostics["repeat"],
         "collapsed": diagnostics["collapsed"],
+        "collapse_reason": diagnostics["collapse_reason"],
+        "collapsed_folds": diagnostics["collapsed_folds"],
         "const_share": diagnostics["const_share"],
         "output_entropy": diagnostics["output_entropy"],
         "model": config.model,
@@ -223,8 +225,9 @@ def main(argv: Sequence[str] | None = None, *, train_fold: FoldTrainer | None = 
     )
     if diagnostics["collapsed"]:
         print(
-            "WARNING: прогон схлопнулся (const_share > 0.98) и исключается "
-            "из выбора лучшей конфигурации"
+            f"WARNING: прогон схлопнулся ({diagnostics['collapse_reason']}, "
+            f"фолды {diagnostics['collapsed_folds']}) и исключается из выбора "
+            "лучшей конфигурации"
         )
     return 0
 
