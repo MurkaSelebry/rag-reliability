@@ -289,9 +289,13 @@ def train_oof_detailed(
     for fold in range(folds.n_folds):
         train_samples, test_samples = _fold_partition(samples, folds, repeat=repeat, fold=fold)
         if not test_samples:
-            raise ValueError(
-                f"repeat {repeat} fold {fold} is empty in {folds.n_folds}-fold assignment"
+            # На полном корпусе пустых фолдов не бывает; они появляются только под
+            # --limit. Обучать модель, которой некого предсказывать, незачем —
+            # но и молчать нельзя. Полноту покрытия ловит проверка never_scored.
+            logger.warning(
+                "repeat %d fold %d has no held-out case in this run and is skipped", repeat, fold
             )
+            continue
         if not train_samples:
             raise ValueError(f"repeat {repeat} fold {fold} leaves no training part")
 
