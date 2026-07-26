@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import RepeatedStratifiedKFold
 
+from rag_reliability.dataset import load_jsonl
 from rag_reliability.evaluation.protocol import evaluate_cv
 from rag_reliability.schema import Prediction, RagSample
 from rag_reliability.stacking.collect import collect_features
@@ -208,3 +213,82 @@ def test_select_features_by_ci_uses_strictly_positive_lower_bound() -> None:
 
     assert selected == ["surf.p_faith", "surf.p_rel", "m3.p_faith"]
     assert "m3.p_rel" not in FEATURE_SET_V1
+
+
+def test_run_stack_cli_exposes_required_contract() -> None:
+    root = Path(__file__).resolve().parents[1]
+    completed = subprocess.run(
+        [sys.executable, str(root / "scripts" / "run_stack.py"), "--help"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    for option in ("--data", "--folds", "--sources", "--features", "--model", "--output"):
+        assert option in completed.stdout
+
+
+@pytest.mark.slow
+def test_real_artifact_regression_reproduces_historical_stack() -> None:
+    root = Path(__file__).resolve().parents[1]
+    sources = {
+        "surf": root / "predictions/alfa/baselines/surface_e5/scores.jsonl",
+        "m3": root / "predictions/alfa/m3/zero_shot/scores.jsonl",
+    }
+    source_ids: list[set[str]] = []
+    for path in sources.values():
+        source_ids.append(
+            {
+                str(json.loads(line)["id"])
+                for line in path.read_text(encoding="utf-8").splitlines()
+            }
+        )
+    common_ids = set.intersection(*source_ids)
+    samples = [
+        sample
+        for sample in load_jsonl(root / "data/alfa.jsonl")
+        if sample.id in common_ids
+    ]
+    feature_keys = ["surf.p_faith", "surf.p_rel", "m3.p_faith"]
+    matrix, names = collect_features(
+        sources,
+        [sample.id for sample in samples],
+        feature_keys,
+    )
+    predictions = [
+        Prediction(
+            id=sample.id,
+            faithfulness_pred=0,
+            relevance_pred=0,
+            scores=dict(zip(names, row, strict=True)),
+        )
+        for sample, row in zip(samples, matrix, strict=True)
+    ]
+    labels = np.asarray([sample.reliable for sample in samples], dtype=int)
+    assignment = {sample.id: [-1] * 5 for sample in samples}
+    splitter = RepeatedStratifiedKFold(
+        n_splits=5,
+        n_repeats=5,
+        random_state=0,
+    )
+    for split_index, (_, test_indices) in enumerate(splitter.split(matrix, labels)):
+        repeat, fold = divmod(split_index, 5)
+        for index in test_indices:
+            assignment[samples[index].id][repeat] = fold
+
+    result = evaluate_cv(
+        samples,
+        predictions,
+        {
+            "config": {"n_folds": 5, "n_repeats": 5},
+            "assignment": assignment,
+        },
+        score_fn=lambda prediction: 0.5,
+        fit_fn=make_prediction_fit_fn(feature_keys, seed=0),
+    )
+
+    assert len(result.ids) == 446
+    assert float(np.mean(result.per_repeat_f1)) == pytest.approx(0.6085, abs=0.02)
+    assert roc_auc_score(result.y, result.oof_scores) == pytest.approx(0.6277, abs=0.02)
