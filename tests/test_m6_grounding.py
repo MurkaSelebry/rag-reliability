@@ -239,3 +239,106 @@ def test_pairs_are_built_premise_chunk_hypothesis_sentence() -> None:
     grounding_features(SUPPORTED, [CHUNK_A, CHUNK_B], Recorder(), sentence_splitter=split_lines)
 
     assert seen == [(CHUNK_A, SUPPORTED), (CHUNK_B, SUPPORTED)]
+
+
+# --------------------------------------------------------------------------- #
+# CLI: scripts/score_m6_grounding.py поверх scripts/score.py
+# --------------------------------------------------------------------------- #
+
+import json  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import yaml  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+import score_m6_grounding as cli  # noqa: E402
+
+from rag_reliability.dataset import load_jsonl  # noqa: E402
+from rag_reliability.methods import registry  # noqa: E402
+
+DUMMY_DATA = "data/dummy.jsonl"
+
+
+def _run_cli(tmp_path: Path, *extra: str) -> Path:
+    output = tmp_path / "scores.jsonl"
+    assert cli.main(
+        ["--data", DUMMY_DATA, "--output", str(output), "--backend", "dummy", *extra]
+    ) == 0
+    return output
+
+
+def test_cli_smoke_writes_twelve_score_keys(tmp_path: Path) -> None:
+    output = _run_cli(tmp_path, "--limit", "10")
+
+    rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines() if line]
+    assert len(rows) == 10
+    for row in rows:
+        assert set(row["scores"]) == set(cli.SCORE_KEYS)
+        assert row["faithfulness_pred"] == 0 and row["relevance_pred"] == 0
+
+
+def test_cli_artifact_passes_the_registry_contract(tmp_path: Path) -> None:
+    output = _run_cli(tmp_path, "--limit", "5")
+
+    registry.validate_scores_file(output, cli.SPEC, expected_n=5)
+
+
+def test_cli_writes_run_yaml_with_pair_counts(tmp_path: Path) -> None:
+    _run_cli(tmp_path, "--limit", "5")
+
+    meta = yaml.safe_load((tmp_path / "run.yaml").read_text(encoding="utf-8"))
+    assert meta["method"]["name"] == "m6_grounding"
+    assert meta["method"]["default_score_expr"] == "m6.min_entail"
+    assert meta["partial"] is True
+    assert "hash" in meta["git"]
+
+
+def test_cli_resume_continues_without_duplicates(tmp_path: Path) -> None:
+    output = _run_cli(tmp_path, "--limit", "4")
+
+    _run_cli(tmp_path, "--limit", "8", "--resume")
+
+    rows = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines() if line]
+    ids = [row["id"] for row in rows]
+    assert len(ids) == len(set(ids)) == 8
+
+
+def test_cli_shuffle_is_deterministic_for_a_seed(tmp_path: Path) -> None:
+    samples = load_jsonl(DUMMY_DATA)
+    args = cli.parse_args(
+        ["--data", DUMMY_DATA, "--output", "x", "--shuffle", "--seed", "7", "--subsample", "5"]
+    )
+
+    first = [sample.id for sample in cli.select_samples(samples, args)]
+    second = [sample.id for sample in cli.select_samples(samples, args)]
+
+    assert first == second
+    assert len(first) == 5
+    assert set(first) <= {sample.id for sample in samples}
+
+
+def test_auc_report_carries_intervals_for_every_feature(tmp_path: Path) -> None:
+    output = _run_cli(tmp_path)
+    report_path = tmp_path / "auc.json"
+
+    assert cli.main(
+        [
+            "--auc-only",
+            "--data", DUMMY_DATA,
+            "--scores", str(output),
+            "--auc-report", str(report_path),
+            "--bootstrap-B", "200",
+        ]
+    ) == 0
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["n"] == len(load_jsonl(DUMMY_DATA))
+    assert set(report["features"]) == set(cli.SCORE_KEYS)
+    for entry in report["features"].values():
+        if entry.get("constant"):
+            continue
+        for target in ("faithfulness", "reliable"):
+            assert 0.0 <= entry[target]["auc"] <= 1.0
+            assert entry[target]["ci95_lo"] <= entry[target]["auc"] <= entry[target]["ci95_hi"]
