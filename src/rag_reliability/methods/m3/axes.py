@@ -398,16 +398,18 @@ def extract_axis_verdict(
     Та же цепочка и те же значения, что в ``judge_client._judge_verdict``, но
     для одной оси: одноосевой ответ не проходит двухосевой парсер.
     """
+    verdict = parse_axis_verdict(text, axis)
     meta: dict = {
         "axis": axis,
         "raw": text[-400:],
         "truncated": finish_reason == "length",
         "marker": parse_marker(text),
+        # Дискретный вердикт сэмпла: из него считается доля голосов PASS.
+        "verdict": verdict,
     }
     probability = axis_pass_prob(tokens, axis)
     if probability is not None:
         return probability, {"method": "logprobs", **meta}
-    verdict = parse_axis_verdict(text, axis)
     if verdict is not None:
         return (0.9 if verdict == 1 else 0.1), {"method": "regex", **meta}
     return 0.5, {"method": "default", **meta}
