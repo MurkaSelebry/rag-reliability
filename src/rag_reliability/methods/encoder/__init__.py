@@ -19,15 +19,33 @@ from rag_reliability.methods.encoder.data import (
     parse_chunks,
     split_dialog,
 )
+from rag_reliability.methods.encoder.train import (
+    EpochLog,
+    FoldOutcome,
+    FoldRequest,
+    OofResult,
+    TrainConfig,
+    is_collapsed,
+    train_oof,
+    train_oof_detailed,
+)
 
 __all__ = [
     "EncodedInput",
     "EncoderExample",
     "EncoderSegments",
+    "EpochLog",
+    "FoldOutcome",
+    "FoldRequest",
+    "OofResult",
+    "TrainConfig",
     "build_encoder_text",
     "build_segments",
     "encode",
+    "is_collapsed",
     "make_examples",
     "parse_chunks",
     "split_dialog",
+    "train_oof",
+    "train_oof_detailed",
 ]
