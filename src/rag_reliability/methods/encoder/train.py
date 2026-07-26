@@ -397,7 +397,7 @@ def _collate(batch: list[Any], pad_id: int) -> dict[str, Any]:
     return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
 
-def _predict_logits(model: Any, examples: Sequence[Any], pad_id: int, batch_size: int) -> list[float]:
+def batched_logits(model: Any, examples: Sequence[Any], pad_id: int, batch_size: int) -> list[float]:
     import torch  # noqa: PLC0415
 
     device = next(model.parameters()).device
@@ -478,7 +478,7 @@ def train_fold_transformers(request: FoldRequest) -> FoldOutcome:
                 optimizer.zero_grad(set_to_none=True)
         # OOF-логиты — это логиты последней эпохи: второй прогон инференса ради
         # того же числа стоил бы лишний проход по held-out на каждом фолде.
-        logits = _predict_logits(model, test_examples, pad_id, config.batch_size)
+        logits = batched_logits(model, test_examples, pad_id, config.batch_size)
         request.on_epoch_end(epoch, logits)
 
     checkpoint = _save_checkpoint(model, config, request.repeat, request.fold)

@@ -6,10 +6,21 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 
 import pytest
 
+from rag_reliability.methods import registry
+from rag_reliability.methods.encoder.predict import (
+    LOGIT_KEY,
+    PROB_KEY,
+    checkpoint_meta,
+    logits_to_predictions,
+    sigmoid,
+    write_scores,
+)
 from rag_reliability.methods.encoder.train import (
     FoldOutcome,
     FoldRequest,
@@ -289,3 +300,69 @@ def test_checkpoints_are_recorded_per_fold() -> None:
 def test_oof_result_of_an_empty_run_cannot_claim_a_verdict() -> None:
     with pytest.raises(ValueError, match="empty"):
         OofResult(logits={}).collapsed  # noqa: B018
+
+
+# --------------------------------------------------------------------------- #
+# Артефакт scores.jsonl
+# --------------------------------------------------------------------------- #
+
+
+def test_artifact_carries_the_raw_logit_under_the_contract_key() -> None:
+    predictions = logits_to_predictions({"a": 1.5, "b": -2.0})
+
+    assert [prediction.scores[LOGIT_KEY] for prediction in predictions] == [1.5, -2.0]
+    assert set(predictions[0].scores) == {LOGIT_KEY, PROB_KEY}
+
+
+def test_artifact_leaves_binarization_to_the_protocol() -> None:
+    """Порог подбирается внутри train-части фолда, а не вшивается в артефакт."""
+    predictions = logits_to_predictions({"a": 9.0, "b": -9.0})
+
+    assert all(prediction.faithfulness_pred == 0 for prediction in predictions)
+    assert all(prediction.relevance_pred == 0 for prediction in predictions)
+
+
+def test_probability_key_is_a_monotone_image_of_the_logit_inside_the_unit_interval() -> None:
+    """evaluate_cv отвергает скор вне [0, 1], а --score-expr не умеет сигмоиду."""
+    logits = [-800.0, -3.0, -0.5, 0.0, 0.5, 3.0, 800.0]
+
+    probabilities = [sigmoid(logit) for logit in logits]
+
+    assert probabilities == sorted(probabilities)
+    assert all(0.0 <= probability <= 1.0 for probability in probabilities)
+    assert sigmoid(0.0) == 0.5
+
+
+def test_artifact_rejects_a_non_finite_logit() -> None:
+    with pytest.raises(ValueError, match="not finite"):
+        logits_to_predictions({"a": float("nan")})
+
+
+def test_artifact_of_an_empty_run_is_an_error() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        logits_to_predictions({})
+
+
+def test_written_artifact_satisfies_the_registry_contract(tmp_path: Path) -> None:
+    samples = make_corpus()
+    logits = train_oof(samples, make_folds(samples), TrainConfig(), train_fold=RecordingTrainer())
+    path = tmp_path / "scores.jsonl"
+
+    n_written = write_scores(logits_to_predictions(logits), path)
+
+    registry.validate_scores_file(path, registry.get("encoder"), expected_n=len(samples))
+    assert n_written == len(samples)
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert all(row["scores"][LOGIT_KEY] == logits[row["id"]] for row in rows)
+
+
+def test_checkpoint_meta_reports_a_missing_file_instead_of_a_fake_hash(tmp_path: Path) -> None:
+    present = tmp_path / "fold0.pt"
+    present.write_bytes(b"weights")
+
+    meta = checkpoint_meta({0: str(present), 1: str(tmp_path / "fold1.pt")})
+
+    assert meta[0]["exists"] is True
+    assert len(meta[0]["sha256"]) == 64
+    assert meta[1]["exists"] is False
+    assert meta[1]["sha256"] is None

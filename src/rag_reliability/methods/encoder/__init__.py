@@ -19,6 +19,16 @@ from rag_reliability.methods.encoder.data import (
     parse_chunks,
     split_dialog,
 )
+from rag_reliability.methods.encoder.predict import (
+    LOGIT_KEY,
+    PROB_KEY,
+    checkpoint_meta,
+    checkpoint_sha256,
+    logits_to_predictions,
+    predict_logits,
+    sigmoid,
+    write_scores,
+)
 from rag_reliability.methods.encoder.train import (
     EpochLog,
     FoldOutcome,
@@ -31,6 +41,8 @@ from rag_reliability.methods.encoder.train import (
 )
 
 __all__ = [
+    "LOGIT_KEY",
+    "PROB_KEY",
     "EncodedInput",
     "EncoderExample",
     "EncoderSegments",
@@ -41,11 +53,17 @@ __all__ = [
     "TrainConfig",
     "build_encoder_text",
     "build_segments",
+    "checkpoint_meta",
+    "checkpoint_sha256",
     "encode",
     "is_collapsed",
+    "logits_to_predictions",
     "make_examples",
     "parse_chunks",
+    "predict_logits",
+    "sigmoid",
     "split_dialog",
     "train_oof",
     "train_oof_detailed",
+    "write_scores",
 ]
