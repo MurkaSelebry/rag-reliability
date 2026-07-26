@@ -48,14 +48,19 @@ def alternating_trainer(request: FoldRequest) -> FoldOutcome:
     logits = [1.0 if index % 2 else -1.0 for index in range(len(request.test_samples))]
     for epoch in range(1, request.config.n_epochs + 1):
         request.on_epoch_end(epoch, logits)
-    return FoldOutcome(logits=tuple(logits))
+    return FoldOutcome(
+        logits=tuple(logits),
+        extra_logits=tuple(float(request.fold) for _ in request.extra_samples),
+    )
 
 
 def constant_trainer(request: FoldRequest) -> FoldOutcome:
     logits = [3.0] * len(request.test_samples)
     for epoch in range(1, request.config.n_epochs + 1):
         request.on_epoch_end(epoch, logits)
-    return FoldOutcome(logits=tuple(logits))
+    return FoldOutcome(
+        logits=tuple(logits), extra_logits=tuple(3.0 for _ in request.extra_samples)
+    )
 
 
 @pytest.fixture
@@ -86,6 +91,9 @@ def corpus(tmp_path: Path) -> dict[str, Any]:
         "folds": str(folds_path),
         "n_in_folds": len(samples),
         "n_corpus": len(samples) + len(outside),
+        "ids_in_folds": [sample.id for sample in samples],
+        "ids_outside": [sample.id for sample in outside],
+        "all_ids": [sample.id for sample in (*samples, *outside)],
     }
 
 
@@ -140,15 +148,64 @@ def test_the_script_reads_folds_from_the_canonical_corpus_split() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_cli_writes_one_scores_row_per_case_inside_the_folds(
+def test_cli_writes_one_scores_row_per_corpus_case(
     corpus: dict[str, Any], tmp_path: Path
 ) -> None:
+    """Артефакт покрывает корпус целиком, а не только кейсы внутри фолдов.
+
+    Кейсы вне фолдов — одна oversized-группа, отсутствующая в train-части
+    любого фолда; выбросить их значит отдать стэкеру треть корпуса без скора.
+    """
     scores_path = run_cli(corpus, tmp_path, trainer=alternating_trainer)
 
     rows = [json.loads(line) for line in scores_path.read_text(encoding="utf-8").splitlines()]
-    assert len(rows) == corpus["n_in_folds"]
+    assert len(rows) == corpus["n_corpus"]
+    assert {row["id"] for row in rows} == set(corpus["all_ids"])
     assert all(set(row["scores"]) == {LOGIT_KEY, PROB_KEY} for row in rows)
     assert all(row["faithfulness_pred"] == 0 and row["relevance_pred"] == 0 for row in rows)
+
+
+def test_cases_outside_the_folds_are_marked_as_ensemble_scored(
+    corpus: dict[str, Any], tmp_path: Path
+) -> None:
+    """Строку с ансамблевым скором нельзя спутать с честной out-of-fold."""
+    scores_path = run_cli(corpus, tmp_path, trainer=alternating_trainer)
+
+    rows = [json.loads(line) for line in scores_path.read_text(encoding="utf-8").splitlines()]
+    by_method: dict[str, set[str]] = {}
+    for row in rows:
+        by_method.setdefault(row["prob_method"], set()).add(row["id"])
+
+    assert by_method["encoder_oof"] == set(corpus["ids_in_folds"])
+    assert by_method["encoder_fold_ensemble"] == set(corpus["ids_outside"])
+
+
+def test_ensemble_logit_is_the_mean_over_fold_models(
+    corpus: dict[str, Any], tmp_path: Path
+) -> None:
+    """alternating_trainer отдаёт номер фолда: среднее по 0..4 — это 2.0."""
+    scores_path = run_cli(corpus, tmp_path, trainer=alternating_trainer)
+
+    rows = [json.loads(line) for line in scores_path.read_text(encoding="utf-8").splitlines()]
+    outside = [row for row in rows if row["id"] in set(corpus["ids_outside"])]
+
+    assert outside
+    assert all(row["scores"][LOGIT_KEY] == pytest.approx(2.0) for row in outside)
+
+
+def test_a_trainer_that_ignores_the_outside_cases_fails_the_run(
+    corpus: dict[str, Any], tmp_path: Path
+) -> None:
+    """Молча неполный артефакт — это ровно то, из-за чего C2 не прошла приёмку."""
+
+    def forgetful(request: FoldRequest) -> FoldOutcome:
+        logits = [1.0 if index % 2 else -1.0 for index in range(len(request.test_samples))]
+        for epoch in range(1, request.config.n_epochs + 1):
+            request.on_epoch_end(epoch, logits)
+        return FoldOutcome(logits=tuple(logits))
+
+    with pytest.raises(ValueError, match="outside the folds"):
+        run_cli(corpus, tmp_path, trainer=forgetful)
 
 
 def test_run_yaml_records_the_single_repeat_and_the_collapse_verdict(
@@ -176,18 +233,20 @@ def test_run_yaml_marks_a_collapsed_configuration(
     assert payload["encoder"]["const_share"] == 1.0
 
 
-def test_run_yaml_states_coverage_instead_of_silently_dropping_cases(
+def test_run_yaml_states_coverage_and_splits_it_by_score_source(
     corpus: dict[str, Any], tmp_path: Path
 ) -> None:
     scores_path = run_cli(corpus, tmp_path, trainer=alternating_trainer)
 
-    coverage = yaml.safe_load((scores_path.parent / "run.yaml").read_text(encoding="utf-8"))[
-        "coverage"
-    ]
+    payload = yaml.safe_load((scores_path.parent / "run.yaml").read_text(encoding="utf-8"))
+    coverage = payload["coverage"]
     assert coverage["corpus_n"] == corpus["n_corpus"]
-    assert coverage["scored_n"] == corpus["n_in_folds"]
-    assert coverage["excluded_n"] == corpus["n_corpus"] - corpus["n_in_folds"]
+    assert coverage["scored_n"] == corpus["n_corpus"]
+    assert coverage["excluded_n"] == 0
+    assert coverage["oof_n"] == corpus["n_in_folds"]
+    assert coverage["fold_ensemble_n"] == corpus["n_corpus"] - corpus["n_in_folds"]
     assert len(coverage["corpus_sha256"]) == 64
+    assert payload["partial"] is False
 
 
 def test_epoch_diagnostics_land_in_the_run_artifacts(

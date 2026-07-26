@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 LOGIT_KEY = "enc.logit"
 PROB_KEY = "enc.prob"
 PROB_METHOD = "encoder_oof"
+#: Кейсы вне folds.json: среднее по моделям фолдов. Помечены отдельно, потому
+#: что ансамбль систематически чуть сильнее одиночной модели, и стэкер C1
+#: должен видеть разницу, а не считать все строки однородными.
+ENSEMBLE_PROB_METHOD = "encoder_fold_ensemble"
 
 
 def sigmoid(logit: float) -> float:
@@ -39,10 +43,23 @@ def sigmoid(logit: float) -> float:
     return exponent / (1.0 + exponent)
 
 
-def logits_to_predictions(logits: dict[str, float]) -> list[Prediction]:
-    """OOF-логиты -> строки артефакта. Порядок словаря сохраняется."""
+def logits_to_predictions(
+    logits: dict[str, float], *, ensemble_ids: Collection[str] = ()
+) -> list[Prediction]:
+    """Логиты -> строки артефакта. Порядок словаря сохраняется.
+
+    ``ensemble_ids`` — кейсы вне ``folds.json``, скоренные средним по моделям
+    фолдов; в ``prob_method`` у них другой источник, чтобы строку с ансамблевым
+    скором нельзя было спутать с честной out-of-fold.
+    """
     if not logits:
         raise ValueError("Cannot build an artifact from an empty set of logits")
+    unknown = [sample_id for sample_id in ensemble_ids if sample_id not in logits]
+    if unknown:
+        raise ValueError(
+            f"{len(unknown)} ensemble id(s) have no logit: {unknown[:5]}"
+        )
+    ensemble = set(ensemble_ids)
     predictions: list[Prediction] = []
     for sample_id, logit in logits.items():
         value = float(logit)
@@ -53,7 +70,7 @@ def logits_to_predictions(logits: dict[str, float]) -> list[Prediction]:
                 id=sample_id,
                 faithfulness_pred=0,
                 relevance_pred=0,
-                prob_method=PROB_METHOD,
+                prob_method=ENSEMBLE_PROB_METHOD if sample_id in ensemble else PROB_METHOD,
                 scores={LOGIT_KEY: value, PROB_KEY: sigmoid(value)},
             )
         )

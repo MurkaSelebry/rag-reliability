@@ -120,6 +120,8 @@ class FoldRequest:
     test_samples: tuple[RagSample, ...]
     config: TrainConfig
     on_epoch_end: EpochHook
+    #: Кейсы вне ``folds.json`` — их скорит каждая модель фолда, см. ``train_oof_detailed``.
+    extra_samples: tuple[RagSample, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -128,6 +130,8 @@ class FoldOutcome:
 
     logits: tuple[float, ...]
     checkpoint: str | None = None
+    #: Логиты ``extra_samples`` этой же моделью; усредняются по фолдам.
+    extra_logits: tuple[float, ...] = ()
 
 
 FoldTrainer = Callable[[FoldRequest], FoldOutcome]
@@ -135,13 +139,34 @@ FoldTrainer = Callable[[FoldRequest], FoldOutcome]
 
 @dataclass
 class OofResult:
-    """OOF-логиты плюс всё, без чего прогон нельзя честно описать в run.yaml."""
+    """Логиты по всему корпусу плюс всё, без чего прогон нельзя честно описать.
+
+    Два источника скора, и их нельзя путать. ``oof_ids`` предсказаны честным
+    out-of-fold: модель фолда не видела ни одного кейса своего фолда.
+    ``ensemble_ids`` — кейсы вне ``folds.json``; их скорит среднее по всем
+    моделям фолдов. Это не ухудшение изоляции, а её усиление: вне фолдов лежит
+    ровно одна oversized-группа, целиком отсутствующая в train-части любого
+    фолда, так что модель не видела не только сам кейс, но и всю его группу.
+    Ансамблевое усреднение при этом даёт им чуть более сильный скор, чем
+    одиночная модель, — поэтому источник помечен в артефакте и в ``run.yaml``,
+    а метрики по ним не считаются: ``evaluate_cv`` их отбрасывает по отсутствию
+    фолда, и вердикт о схлопывании тоже считается только по ``oof_ids``.
+    """
 
     logits: dict[str, float]
+    oof_ids: tuple[str, ...] = ()
+    ensemble_ids: tuple[str, ...] = ()
     epochs: list[EpochLog] = field(default_factory=list)
     checkpoints: dict[int, str] = field(default_factory=dict)
     repeat: int = 0
     n_repeats: int = 1
+
+    @property
+    def oof_logits(self) -> dict[str, float]:
+        """Только честный out-of-fold: на нём меряют качество и схлопывание."""
+        if not self.oof_ids:
+            return dict(self.logits)
+        return {sample_id: self.logits[sample_id] for sample_id in self.oof_ids}
 
     @property
     def collapsed(self) -> bool:
@@ -167,7 +192,7 @@ class OofResult:
         Обучения при этом не было ни в одном фолде. Смоук на крошечной модели
         воспроизвёл ровно этот случай: 3 фолда по const_share = 1.0, пул 0.67.
         """
-        if is_collapsed(self.logits):
+        if is_collapsed(self.oof_logits):
             return "pooled"
         trained = {log.fold for log in self.epochs}
         if trained and len(self.collapsed_folds) == len(trained):
@@ -175,9 +200,11 @@ class OofResult:
         return None
 
     def diagnostics(self) -> dict[str, Any]:
-        summary = degenerate_rate(decisions_from_logits(self.logits))
+        summary = degenerate_rate(decisions_from_logits(self.oof_logits))
         return {
             "n_scored": len(self.logits),
+            "n_oof": len(self.oof_logits),
+            "n_ensemble": len(self.ensemble_ids),
             "repeat": self.repeat,
             "n_repeats": self.n_repeats,
             "collapsed": self.collapsed,
@@ -268,6 +295,15 @@ def _fold_partition(
     return tuple(train), tuple(test)
 
 
+def _split_by_fold_assignment(
+    samples: Sequence[RagSample], folds: Folds
+) -> tuple[tuple[RagSample, ...], tuple[RagSample, ...]]:
+    """Кейсы с номером фолда и кейсы без него; порядок корпуса сохраняется."""
+    inside = tuple(sample for sample in samples if sample.id in folds.assignment)
+    outside = tuple(sample for sample in samples if sample.id not in folds.assignment)
+    return inside, outside
+
+
 def train_oof(
     samples: Sequence[RagSample],
     folds: Folds,
@@ -278,7 +314,10 @@ def train_oof(
 ) -> dict[str, float]:
     """Обучает n_folds моделей, каждая предсказывает свой held-out фолд.
 
-    Возвращает OOF-логиты по всем кейсам -> ``scores['enc.logit']``.
+    Возвращает OOF-логиты по всем кейсам -> ``scores['enc.logit']``. «По всем» —
+    буквально: кейсы, которым ``folds.json`` не дал фолда, скорит среднее по
+    моделям фолдов (см. ``OofResult``), иначе артефакт метода покрывал бы две
+    трети корпуса.
     """
     return train_oof_detailed(
         samples, folds, config, repeat=repeat, train_fold=train_fold
@@ -305,18 +344,20 @@ def train_oof_detailed(
             f"repeat must be in [0, {folds.n_repeats}), got {repeat}; "
             "folds.json declares fewer repeats than requested"
         )
-    missing = [sample.id for sample in samples if sample.id not in folds.assignment]
-    if missing:
+    inside, outside = _split_by_fold_assignment(samples, folds)
+    if not inside:
         raise ValueError(
-            f"{len(missing)} sample(s) have no fold assignment: {missing[:5]}. "
-            "Filter the corpus with evaluable_samples() first."
+            f"None of the {len(samples)} sample(s) have a fold assignment; "
+            "wrong corpus or wrong folds file"
         )
 
     trainer = train_fold if train_fold is not None else train_fold_transformers
     result = OofResult(logits={}, repeat=repeat, n_repeats=1)
+    outside_totals: dict[str, float] = {sample.id: 0.0 for sample in outside}
+    outside_counts: dict[str, int] = {sample.id: 0 for sample in outside}
 
     for fold in range(folds.n_folds):
-        train_samples, test_samples = _fold_partition(samples, folds, repeat=repeat, fold=fold)
+        train_samples, test_samples = _fold_partition(inside, folds, repeat=repeat, fold=fold)
         if not test_samples:
             # На полном корпусе пустых фолдов не бывает; они появляются только под
             # --limit. Обучать модель, которой некого предсказывать, незачем —
@@ -337,12 +378,19 @@ def train_oof_detailed(
                 test_samples=test_samples,
                 config=config,
                 on_epoch_end=make_epoch_hook(repeat=repeat, fold=fold, sink=result.epochs),
+                extra_samples=outside,
             )
         )
         if len(outcome.logits) != len(test_samples):
             raise ValueError(
                 f"repeat {repeat} fold {fold}: trainer returned {len(outcome.logits)} logit(s) "
                 f"for {len(test_samples)} held-out case(s)"
+            )
+        if len(outcome.extra_logits) != len(outside):
+            raise ValueError(
+                f"repeat {repeat} fold {fold}: trainer returned {len(outcome.extra_logits)} "
+                f"logit(s) for {len(outside)} case(s) outside the folds; the artifact must "
+                "cover the whole corpus"
             )
         logged = len(result.epochs) - before
         if logged != config.n_epochs:
@@ -352,20 +400,42 @@ def train_oof_detailed(
             )
         for sample, logit in zip(test_samples, outcome.logits, strict=True):
             result.logits[sample.id] = float(logit)
+        for sample, logit in zip(outside, outcome.extra_logits, strict=True):
+            outside_totals[sample.id] += float(logit)
+            outside_counts[sample.id] += 1
         if outcome.checkpoint is not None:
             result.checkpoints[fold] = outcome.checkpoint
 
-    never_scored = [sample.id for sample in samples if sample.id not in result.logits]
+    result.oof_ids = tuple(result.logits)
+    never_scored = [sample.id for sample in inside if sample.id not in result.logits]
     if never_scored:
         raise ValueError(
             f"{len(never_scored)} sample(s) never landed in a held-out fold: {never_scored[:5]}"
         )
+
+    unscored_outside = [sample_id for sample_id, count in outside_counts.items() if count == 0]
+    if unscored_outside:
+        raise ValueError(
+            f"{len(unscored_outside)} case(s) outside the folds were never scored: "
+            f"{unscored_outside[:5]}; no fold model ran"
+        )
+    for sample in outside:
+        result.logits[sample.id] = outside_totals[sample.id] / outside_counts[sample.id]
+    result.ensemble_ids = tuple(sample.id for sample in outside)
+    if outside:
+        logger.info(
+            "%d case(s) outside %d-fold assignment scored by the mean of %d fold model(s)",
+            len(outside),
+            folds.n_folds,
+            max(outside_counts.values()),
+        )
+
     if result.collapsed:
         logger.warning(
             "run collapsed (%s): const_share=%.4f, collapsed folds %s — configuration is "
             "excluded from best-config choice",
             result.collapse_reason,
-            float(degenerate_rate(decisions_from_logits(result.logits))["const_share"]),
+            float(degenerate_rate(decisions_from_logits(result.oof_logits))["const_share"]),
             result.collapsed_folds,
         )
     return result
@@ -470,6 +540,7 @@ def train_fold_transformers(request: FoldRequest) -> FoldOutcome:
 
     train_examples = make_examples(request.train_samples, tokenizer, config.max_length)
     test_examples = make_examples(request.test_samples, tokenizer, config.max_length)
+    extra_examples = make_examples(request.extra_samples, tokenizer, config.max_length)
     pos_weight = compute_pos_weight(
         [example.label for example in train_examples], config.pos_weight_mode
     )
@@ -517,8 +588,13 @@ def train_fold_transformers(request: FoldRequest) -> FoldOutcome:
         logits = batched_logits(model, test_examples, pad_id, config.batch_size)
         request.on_epoch_end(epoch, logits)
 
+    extra = (
+        batched_logits(model, extra_examples, pad_id, config.batch_size) if extra_examples else []
+    )
     checkpoint = _save_checkpoint(model, config, request.repeat, request.fold)
-    return FoldOutcome(logits=tuple(logits), checkpoint=checkpoint)
+    return FoldOutcome(
+        logits=tuple(logits), checkpoint=checkpoint, extra_logits=tuple(extra)
+    )
 
 
 def _save_checkpoint(model: Any, config: TrainConfig, repeat: int, fold: int) -> str:

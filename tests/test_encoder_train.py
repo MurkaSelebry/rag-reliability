@@ -72,6 +72,7 @@ class RecordingTrainer:
 
     def __init__(self, *, logit: float | None = None, epochs_to_report: int | None = None) -> None:
         self.seen: list[tuple[int, tuple[str, ...], tuple[str, ...]]] = []
+        self.extra_seen: list[tuple[str, ...]] = []
         self.logit = logit
         self.epochs_to_report = epochs_to_report
 
@@ -79,6 +80,7 @@ class RecordingTrainer:
         train_ids = tuple(sample.id for sample in request.train_samples)
         test_ids = tuple(sample.id for sample in request.test_samples)
         self.seen.append((request.fold, train_ids, test_ids))
+        self.extra_seen.append(tuple(sample.id for sample in request.extra_samples))
         # Логит по умолчанию зависит от кейса, чтобы прогон не выглядел схлопнувшимся.
         logits = [
             self.logit if self.logit is not None else (1.0 if index % 2 else -1.0)
@@ -91,7 +93,12 @@ class RecordingTrainer:
         )
         for epoch in range(1, n_epochs + 1):
             request.on_epoch_end(epoch, logits)
-        return FoldOutcome(logits=tuple(logits), checkpoint=f"ckpt/fold{request.fold}.pt")
+        return FoldOutcome(
+            logits=tuple(logits),
+            checkpoint=f"ckpt/fold{request.fold}.pt",
+            # Номер фолда: так видно, что усреднение идёт по всем моделям.
+            extra_logits=tuple(float(request.fold) for _ in request.extra_samples),
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -169,13 +176,87 @@ def test_train_oof_rejects_a_repeat_folds_json_does_not_have() -> None:
         train_oof(samples, folds, TrainConfig(), repeat=3, train_fold=RecordingTrainer())
 
 
-def test_train_oof_rejects_cases_without_a_fold_assignment() -> None:
+def test_cases_without_a_fold_are_scored_by_the_mean_of_the_fold_models() -> None:
+    """Кейсы вне folds.json — одна oversized-группа; выбрасывать их нельзя.
+
+    Группа целиком отсутствует в train-части любого фолда, поэтому изоляция
+    здесь даже строже обычного OOF: модель не видела ни кейс, ни его группу.
+    """
     samples = make_corpus()
     folds = make_folds(samples)
     orphan = make_sample("case_999")
+    trainer = RecordingTrainer()
 
-    with pytest.raises(ValueError, match="no fold assignment"):
-        train_oof([*samples, orphan], folds, TrainConfig(), train_fold=RecordingTrainer())
+    result = train_oof_detailed(
+        [*samples, orphan], folds, TrainConfig(), train_fold=trainer
+    )
+
+    assert set(result.logits) == {sample.id for sample in samples} | {orphan.id}
+    assert result.ensemble_ids == (orphan.id,)
+    assert set(result.oof_ids) == {sample.id for sample in samples}
+    # RecordingTrainer отдаёт номер фолда: среднее по 0..4 равно 2.0.
+    assert result.logits[orphan.id] == pytest.approx(2.0)
+    assert all(seen == (orphan.id,) for seen in trainer.extra_seen)
+
+
+def test_the_outside_group_never_enters_a_training_part() -> None:
+    samples = make_corpus()
+    orphan = make_sample("case_999")
+    trainer = RecordingTrainer()
+
+    train_oof([*samples, orphan], make_folds(samples), TrainConfig(), train_fold=trainer)
+
+    for _fold, train_ids, test_ids in trainer.seen:
+        assert orphan.id not in train_ids
+        assert orphan.id not in test_ids
+
+
+def test_a_trainer_that_skips_the_outside_cases_fails_the_run() -> None:
+    """Молчаливо неполный артефакт — то, из-за чего критерий приёмки не прошёл."""
+    samples = make_corpus()
+    orphan = make_sample("case_999")
+
+    def forgetful(request: FoldRequest) -> FoldOutcome:
+        logits = [1.0 if index % 2 else -1.0 for index in range(len(request.test_samples))]
+        for epoch in range(1, request.config.n_epochs + 1):
+            request.on_epoch_end(epoch, logits)
+        return FoldOutcome(logits=tuple(logits))
+
+    with pytest.raises(ValueError, match="outside the folds"):
+        train_oof([*samples, orphan], make_folds(samples), TrainConfig(), train_fold=forgetful)
+
+
+def test_collapse_is_judged_on_the_out_of_fold_part_only() -> None:
+    """Ансамблевые строки не должны разбавлять вердикт о схлопывании."""
+    samples = make_corpus()
+    orphans = [make_sample(f"case_{900 + index}") for index in range(40)]
+    folds = make_folds(samples)
+
+    def collapsed_oof(request: FoldRequest) -> FoldOutcome:
+        logits = [5.0] * len(request.test_samples)
+        for epoch in range(1, request.config.n_epochs + 1):
+            request.on_epoch_end(epoch, logits)
+        # Вне фолдов — разнобой, которого хватило бы, чтобы пул выглядел живым.
+        extra = [5.0 if index % 2 else -5.0 for index in range(len(request.extra_samples))]
+        return FoldOutcome(logits=tuple(logits), extra_logits=tuple(extra))
+
+    result = train_oof_detailed(
+        [*samples, *orphans], folds, TrainConfig(), train_fold=collapsed_oof
+    )
+
+    assert result.collapsed is True
+    assert result.collapse_reason == "pooled"
+    assert result.diagnostics()["n_scored"] == len(samples) + len(orphans)
+    assert result.diagnostics()["n_oof"] == len(samples)
+    assert result.diagnostics()["n_ensemble"] == len(orphans)
+
+
+def test_train_oof_rejects_a_corpus_with_no_fold_assignment_at_all() -> None:
+    orphans = [make_sample(f"case_{900 + index}") for index in range(5)]
+    folds = make_folds(make_corpus())
+
+    with pytest.raises(ValueError, match="None of the"):
+        train_oof(orphans, folds, TrainConfig(), train_fold=RecordingTrainer())
 
 
 def test_train_oof_rejects_a_trainer_that_returns_the_wrong_number_of_logits() -> None:

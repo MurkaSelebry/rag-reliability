@@ -6,21 +6,25 @@
 
 Скрипт — тонкая обёртка: вся логика в ``rag_reliability.methods.encoder``.
 Собственного сплита здесь нет и быть не может — разбиение приходит из
-``folds.json``. Артефакт короче корпуса намеренно: фолды исключают
-oversized-группу (753 кейса), а предсказать кейс out-of-fold, не имея для него
-фолда, нечем. Ровно как у ``surface``/``majority``: 1480 строк из 2233.
+``folds.json``.
+
+Артефакт покрывает корпус целиком. 1480 кейсов, которым ``folds.json`` дал
+фолд, предсказаны честным out-of-fold; оставшиеся 753 — это ровно одна
+oversized-группа, целиком отсутствующая в train-части любого фолда, и их
+скорит среднее по моделям фолдов. Источник скора помечен в ``prob_method`` и
+посчитан в ``run.yaml``; в метрики эти строки не попадают — ``evaluate_cv``
+отбрасывает их по отсутствию фолда.
 
 Оценка — отдельным шагом; порог здесь не подбирается:
 
     python scripts/evaluate_cv.py --data data/alfa.jsonl \\
-        --folds data/splits/folds_alfa.json --score-expr "enc.prob" \\
+        --folds data/splits/folds_alfa.json \\
+        --score-expr "enc.prob" --faith-expr "enc.prob" --rel-expr "enc.prob" \\
         --scores predictions/alfa/encoder/<variant>/scores.jsonl \\
         --output predictions/alfa/encoder/<variant>/report.json
 
-Этот шаг сейчас упирается в ``require_full_coverage`` (``evaluate_cv.py:178``,
-B1), который требует строку на каждый кейс корпуса. Барьер общий для всех
-OOF-методов и описан в ``docs/report/wave2.md``; см. раздел PR «Требуется от
-других».
+Оси задаются явно и одним выражением: энкодер предсказывает ``reliable``
+целиком, отдельного сигнала на faithfulness и relevance у него нет.
 """
 
 from __future__ import annotations
@@ -49,11 +53,7 @@ from rag_reliability.methods.encoder.train import (  # noqa: E402
     TrainConfig,
     train_oof_detailed,
 )
-from rag_reliability.methods.surface.oof import (  # noqa: E402
-    corpus_sha256,
-    evaluable_samples,
-    load_folds,
-)
+from rag_reliability.methods.surface.oof import corpus_sha256, load_folds  # noqa: E402
 
 METHOD = "encoder"
 DEFAULT_OUTPUT_ROOT = Path("predictions/alfa/encoder")
@@ -182,21 +182,17 @@ def main(argv: Sequence[str] | None = None, *, train_fold: FoldTrainer | None = 
         samples = samples[: args.limit]
 
     folds = load_folds(args.folds)
-    evaluable = evaluable_samples(samples, folds)
-    if not evaluable:
-        raise ValueError(
-            f"None of the {len(samples)} sample(s) appear in {args.folds}; "
-            "wrong corpus or wrong folds file"
-        )
-
     result = train_oof_detailed(
-        evaluable, folds, config, repeat=args.repeat, train_fold=train_fold
+        samples, folds, config, repeat=args.repeat, train_fold=train_fold
     )
     diagnostics = result.diagnostics()
-    n_written = write_scores(logits_to_predictions(result.logits), scores_path)
+    n_written = write_scores(
+        logits_to_predictions(result.logits, ensemble_ids=result.ensemble_ids), scores_path
+    )
 
-    # partial=True всегда: oversized-группы вне фолдов, полного покрытия не бывает.
-    score.write_run_yaml(run_yaml, args, spec, n=n_written, partial=True)
+    # Артефакт покрывает корпус целиком; partial бывает только под --limit.
+    partial = n_written < n_corpus
+    score.write_run_yaml(run_yaml, args, spec, n=n_written, partial=partial)
     _append_encoder_meta(
         run_yaml,
         config=config,
@@ -206,8 +202,10 @@ def main(argv: Sequence[str] | None = None, *, train_fold: FoldTrainer | None = 
             "corpus_n": n_corpus,
             "scored_n": n_written,
             "excluded_n": n_corpus - n_written,
-            "reason": "cases outside data/splits/folds.json (oversized groups) "
-            "cannot be scored OOF",
+            "oof_n": diagnostics["n_oof"],
+            "fold_ensemble_n": diagnostics["n_ensemble"],
+            "reason": "cases outside the folds (one oversized group) are scored by the mean "
+            "of the fold models: that group is absent from every training part, so no leak",
             "corpus_sha256": corpus_sha256(args.data),
         },
     )
