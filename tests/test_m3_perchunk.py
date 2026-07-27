@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import math
+import re
 from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -42,6 +47,64 @@ class AsyncDummyBatchJudge:
         assert "FAITHFULNESS" in system
         assert len(users) == len(self.scores)
         return list(self.scores)
+
+
+class DummyAsyncChatClient:
+    """Raw-choice клиент в форме ``AsyncJudgeClient.chat``."""
+
+    def __init__(self, cache_dir: Path | None = None) -> None:
+        self.concurrency = 3
+        self.cache_dir = cache_dir
+        self.model = "dummy-model"
+        self.api_base = "dummy://local"
+        self.calls = 0
+        self.active = 0
+        self.max_active = 0
+
+    async def chat(
+        self,
+        messages: list[dict[str, str]],
+        **kwargs: Any,
+    ) -> list[dict]:
+        self.calls += 1
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        await asyncio.sleep(0)
+        self.active -= 1
+
+        user = messages[-1]["content"]
+        match = re.search(r"УНИКАЛЬНЫЙ_ЧАНК_(\d+)", user)
+        assert match is not None
+        index = int(match.group(1))
+        if index == 1:
+            probability = 0.8
+            return [
+                {
+                    "text": "ANALYSIS: опора есть\nMARKER: none\nFAITHFULNESS: PASS",
+                    "tokens": [
+                        {"token": "FAITHFULNESS", "logprob": -0.1, "top": {}},
+                        {"token": ":", "logprob": -0.1, "top": {}},
+                        {
+                            "token": " PASS",
+                            "logprob": math.log(probability),
+                            "top": {
+                                " PASS": math.log(probability),
+                                " FAIL": math.log(1.0 - probability),
+                            },
+                        },
+                    ],
+                    "finish_reason": "stop",
+                }
+            ]
+        if index == 2:
+            return [
+                {
+                    "text": "ANALYSIS: опоры нет\nMARKER: none\nFAITHFULNESS: FAIL",
+                    "tokens": [],
+                    "finish_reason": "stop",
+                }
+            ]
+        return [{"text": "невалидный ответ", "tokens": [], "finish_reason": "stop"}]
 
 
 def make_sample(n_chunks: int) -> RagSample:
@@ -132,6 +195,29 @@ def test_async_batch_backend_is_awaited_once() -> None:
 
     assert judge.network_calls == 1
     assert scores["m3.argmax_chunk"] == 2.0
+
+
+def test_async_judge_client_shape_batches_and_uses_axis_fallback_chain() -> None:
+    client = DummyAsyncChatClient()
+
+    scores = score_per_chunk(make_sample(3), client)
+
+    assert client.calls == 3
+    assert client.max_active == 3
+    assert scores["m3.max_chunk_score"] == pytest.approx(0.8)
+    assert scores["m3.mean_chunk_score"] == pytest.approx((0.8 + 0.1 + 0.5) / 3)
+    assert scores["m3.argmax_chunk"] == 1.0
+
+
+def test_async_judge_client_raw_choices_are_cached(tmp_path: Path) -> None:
+    client = DummyAsyncChatClient(cache_dir=tmp_path)
+    sample = make_sample(3)
+
+    first = score_per_chunk(sample, client)
+    second = score_per_chunk(sample, client)
+
+    assert second == first
+    assert client.calls == 3
 
 
 def test_relevance_is_rejected_before_the_backend_is_called() -> None:
