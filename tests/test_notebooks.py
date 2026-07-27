@@ -35,7 +35,9 @@ REQUIRED_JOBS = (
     "encoder_oof.yaml",
     *(f"ft_judge_fold{fold}.yaml" for fold in range(5)),
 )
-JOB_REQUIRED_KEYS = frozenset({"name", "desc", "cmd", "env", "inputs", "outputs"})
+JOB_REQUIRED_KEYS = frozenset(
+    {"name", "desc", "cmd", "env", "inputs", "outputs", "cloud-instance-type"}
+)
 
 # Ноутбуки, обязательные по карточке D3.
 REQUIRED_NOTEBOOKS = (
