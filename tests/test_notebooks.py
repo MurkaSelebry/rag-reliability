@@ -24,7 +24,18 @@ from pathlib import Path
 
 import pytest
 
-NOTEBOOKS_DIR = Path(__file__).resolve().parent.parent / "notebooks"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+NOTEBOOKS_DIR = REPO_ROOT / "notebooks"
+JOBS_DIR = REPO_ROOT / "jobs"
+
+# Всё, что дольше двух часов, идёт через DataSphere Jobs: VM ноутбука
+# останавливается при простое и шестичасовой прогон умирает на середине.
+REQUIRED_JOBS = (
+    *(f"gepa_{variant}_seed{seed}.yaml" for variant in ("markers", "plain") for seed in (0, 1, 2)),
+    "encoder_oof.yaml",
+    *(f"ft_judge_fold{fold}.yaml" for fold in range(5)),
+)
+JOB_REQUIRED_KEYS = frozenset({"name", "desc", "cmd", "env", "inputs", "outputs"})
 
 # Ноутбуки, обязательные по карточке D3.
 REQUIRED_NOTEBOOKS = (
@@ -157,6 +168,56 @@ def test_notebooks_have_no_business_logic(notebook: Path) -> None:
         f"{notebook.name} импортирует {forbidden} — расчёт переехал в ноутбук. "
         f"Разрешено только окружение: {sorted(ALLOWED_IMPORTS)}"
     )
+
+
+@pytest.fixture(params=sorted(JOBS_DIR.glob("*.yaml")), ids=lambda p: p.name)
+def job(request: pytest.FixtureRequest) -> dict:
+    import yaml  # noqa: PLC0415
+
+    return dict(yaml.safe_load(request.param.read_text(encoding="utf-8")))
+
+
+def test_long_runs_have_job_configs() -> None:
+    """Заготовлены конфиги Jobs для всех прогонов длиннее 2 часов."""
+    missing = [name for name in REQUIRED_JOBS if not (JOBS_DIR / name).is_file()]
+    assert not missing, f"Missing DataSphere Job config(s): {missing}"
+
+
+def test_job_configs_are_complete(job: dict) -> None:
+    """Задание без outputs исполнится и молча выбросит артефакт."""
+    missing = sorted(JOB_REQUIRED_KEYS - set(job))
+    assert not missing, f"Job {job.get('name', '?')} без обязательных полей: {missing}"
+    assert job["cloud-instance-type"] == "g2.1", (
+        f"Job {job['name']} на конфигурации {job['cloud-instance-type']}: LLM-инференс и "
+        "обучение 7B рассчитаны на g2.1 (1× A100 80 GB)"
+    )
+    assert job["outputs"], f"Job {job['name']} ничего не выгружает — артефакт умрёт вместе с VM"
+
+
+def test_job_configs_do_not_call_split_samples(job: dict) -> None:
+    """Задания читают folds.json, а не режут корпус заново."""
+    assert not _SPLIT_SAMPLES_CALL_RE.search(job["cmd"])
+    assert "--folds" in job["cmd"], (
+        f"Job {job['name']} не передаёт --folds: разбиение приходит из folds.json"
+    )
+
+
+def test_judge_jobs_start_vllm_with_max_logprobs() -> None:
+    """У задания нет JupyterLab: vLLM поднимает оно само, и с --max-logprobs 25."""
+    import yaml  # noqa: PLC0415
+
+    wrapper = (JOBS_DIR / "_with_vllm.sh").read_text(encoding="utf-8")
+    assert "--max-logprobs 25" in wrapper, (
+        "клиент судьи запрашивает top_logprobs=20; без --max-logprobs 25 сервер "
+        "вернёт вердикт без вероятностей"
+    )
+    for name in REQUIRED_JOBS:
+        cmd = yaml.safe_load((JOBS_DIR / name).read_text(encoding="utf-8"))["cmd"]
+        if "--api-base" not in cmd:
+            continue
+        assert "_with_vllm.sh" in cmd, (
+            f"Job {name} ходит в --api-base, но не поднимает vLLM: в задании некому это сделать"
+        )
 
 
 def test_notebooks_are_committed_without_outputs(notebook: Path) -> None:
