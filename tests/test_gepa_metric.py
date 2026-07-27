@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -17,6 +21,15 @@ from rag_reliability.methods.m3.gepa import (
     h5_decision,
     h5_verdict,
 )
+
+
+_SPEC = importlib.util.spec_from_file_location(
+    "run_gepa", Path(__file__).parents[1] / "scripts" / "run_gepa.py"
+)
+assert _SPEC is not None and _SPEC.loader is not None
+run_gepa = importlib.util.module_from_spec(_SPEC)
+sys.modules["run_gepa"] = run_gepa
+_SPEC.loader.exec_module(run_gepa)
 
 
 def _labels(n_positive: int, n_negative: int) -> list[int]:
@@ -212,3 +225,47 @@ def test_unpaired_arms_are_an_error() -> None:
 def test_case_count_mismatch_is_an_error() -> None:
     with pytest.raises(ValueError, match="disagree with y"):
         h5_verdict([0, 1, 0, 1], [[0, 1, 0]], [[0, 1, 0, 1]], B=10)
+
+
+# --------------------------------------------------------------------------- #
+# CLI: аргументы и таблица H5
+# --------------------------------------------------------------------------- #
+
+
+def test_evolve_requires_an_axis_and_a_variant() -> None:
+    """Оси эволюционируют раздельно — прогон без оси не имеет смысла."""
+    with pytest.raises(SystemExit):
+        run_gepa.parse_args(["--mode", "evolve", "--data", "d.jsonl"])
+
+
+def test_evolve_defaults_to_the_reworked_protocol() -> None:
+    args = run_gepa.parse_args(
+        ["--mode", "evolve", "--data", "d.jsonl", "--axis", "faithfulness", "--variant", "plain"]
+    )
+    assert args.auto == "medium"  # был light
+    assert args.pareto_size == 300  # был val_size 30
+    assert args.train_size == 300
+
+
+def test_h5_arms_must_be_paired_by_seed() -> None:
+    with pytest.raises(SystemExit):
+        run_gepa.parse_args(
+            ["--mode", "h5", "--data", "d.jsonl", "--h5-markers", "a.jsonl", "--h5-plain", "b.jsonl",
+             "--h5-plain", "c.jsonl"]
+        )
+
+
+def test_h5_table_states_the_verdict_and_the_stop_rule() -> None:
+    verdict = h5_decision(_paired(0.0216, -0.037, 0.100), n_seeds=3, n_cases=1486)
+    table = run_gepa.h5_table(
+        verdict,
+        [
+            ("markers", 0, Path("results/markers_s0/scores.jsonl"), 0.6412),
+            ("plain", 0, Path("results/plain_s0/scores.jsonl"), 0.6196),
+        ],
+    )
+    assert "| markers | 0 | `results/markers_s0/scores.jsonl` | 0.6412 |" in table
+    assert "Δ = **+0.0216**" in table
+    assert "95% ДИ = [-0.0370, +0.1000]" in table
+    assert H5_UNTESTED in table
+    assert "верхней границе 95% ДИ ниже нуля" in table

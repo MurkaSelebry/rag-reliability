@@ -738,7 +738,7 @@ def build_examples(
         examples.append(
             dspy.Example(
                 request=request,
-                gold=axis_gold(sample, axis),
+                gold_label=axis_gold(sample, axis),
                 marker=sample.marker,
                 answer=sample.answer,
                 context=sample.context if spec.needs_context else "",
@@ -760,7 +760,7 @@ def make_metric(
     import dspy  # noqa: PLC0415
 
     def metric(gold, pred, trace=None, pred_name=None, pred_trace=None):  # noqa: ARG001
-        gold_label = int(getattr(gold, "gold"))
+        gold_label = int(gold.gold_label)
         text = str(getattr(pred, "judgement", "") or "")
         predicted = parse_axis_verdict(text, axis)
         score = example_score(gold_label, predicted, weights)
@@ -783,7 +783,7 @@ def make_metric(
 
 def evaluate_program(program, examples: Sequence[Any], axis: str) -> float:
     """Balanced accuracy модуля на наборе — тот же скор, что оптимизирует GEPA."""
-    golds = [int(example.gold) for example in examples]
+    golds = [int(example.gold_label) for example in examples]
     preds = [
         parse_axis_verdict(str(getattr(program(request=example.request), "judgement", "")), axis)
         for example in examples
