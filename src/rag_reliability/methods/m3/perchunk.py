@@ -7,14 +7,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 
 from rag_reliability.methods.m3.axes import AXIS_FAITHFULNESS, build_axis_prompt
 from rag_reliability.methods.surface.features import split_chunks
 from rag_reliability.schema import RagSample
 
-BatchJudgeFn = Callable[[str, Sequence[str]], Sequence[float]]
+BatchJudgeResult = Sequence[float] | Awaitable[Sequence[float]]
+BatchJudgeFn = Callable[[str, Sequence[str]], BatchJudgeResult]
 
 SUPPORT_THRESHOLD = 0.5
 
@@ -61,6 +64,22 @@ def _validated_scores(
     return scores
 
 
+def _resolve_batch(result: BatchJudgeResult, *, sample_id: str) -> Sequence[float]:
+    """Синхронный фасад принимает и обычный, и async batch-адаптер."""
+    if not inspect.isawaitable(result):
+        return result
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(result)
+    if inspect.iscoroutine(result):
+        result.close()
+    raise RuntimeError(
+        f"Async batch judge for sample {sample_id!r} cannot be awaited from a running event loop; "
+        "call score_per_chunk from synchronous orchestration"
+    )
+
+
 def score_per_chunk(
     sample: RagSample,
     judge_fn: BatchJudgeFn,
@@ -80,7 +99,7 @@ def score_per_chunk(
 
     system, users = _chunk_prompts(sample, axis)
     scores = _validated_scores(
-        judge_fn(system, users),
+        _resolve_batch(judge_fn(system, users), sample_id=sample.id),
         sample_id=sample.id,
         expected=len(users),
     )
