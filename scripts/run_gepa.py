@@ -115,7 +115,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     evolve.add_argument(
         "--fail-on-defects",
         action="store_true",
-        help="не сохранять промпт с посторонними доменами или без якоря вердикта",
+        help="ненулевой выход, если в промпте посторонние домены или нет якоря вердикта "
+        "(артефакты прогона всё равно сохраняются)",
     )
     evolve.add_argument(
         "--dry-run",
@@ -247,12 +248,16 @@ def run_evolve(args: argparse.Namespace) -> None:  # noqa: PLR0915
     )
     seed_instruction = load_seed_instruction(args.axis, prompts_dir=args.prompts_dir)
     terms = load_stopwords(args.stopwords_file)
-    _report_defects(prompt_defects(seed_instruction, args.axis, terms=terms), "сид", args.fail_on_defects)
+    _report_defects(
+        prompt_defects(seed_instruction, args.axis, terms=terms), "сид", args.fail_on_defects
+    )
 
-    # Веса классов считаются по D_pareto: именно на нём GEPA ранжирует кандидатов,
-    # и именно там среднее по-примерных скоров обязано равняться balanced accuracy.
+    # Веса классов считаются по D_pareto: именно на нём GEPA ранжирует кандидатов.
+    # normalize=True держит по-примерный скор в [0, 1] — порядок кандидатов от
+    # деления на константу не меняется, а среднее остаётся пропорциональным
+    # balanced accuracy.
     pareto_golds = [axis_gold(sample, args.axis) for sample in sets.pareto]
-    weights = class_weights(pareto_golds)
+    weights = class_weights(pareto_golds, normalize=True)
 
     print(
         f"ось {args.axis}, вариант {args.variant}, seed {args.seed}\n"
@@ -331,7 +336,6 @@ def run_evolve(args: argparse.Namespace) -> None:  # noqa: PLR0915
 
     instruction = extract_instruction(optimized)
     defects = prompt_defects(instruction, args.axis, terms=terms)
-    _report_defects(defects, "эволюционировавшая инструкция", args.fail_on_defects)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     prompt_path = output_dir / f"m3_gepa_prompt_{suffix}.txt"
@@ -382,6 +386,10 @@ def run_evolve(args: argparse.Namespace) -> None:  # noqa: PLR0915
         f"вызовы LM: task={stats['task_lm_calls']}, reflection={stats['reflection_lm_calls']}\n"
         f"инференс: scripts/run_m3.py --mode gepa --prompt-file-{args.axis} {prompt_path}"
     )
+    # Претензии к результату разбираются ПОСЛЕ записи: прогон стоил часов GPU, и
+    # терять его из-за стоп-слова в промпте нельзя. --fail-on-defects делает
+    # выход ненулевым, чтобы автоматика не подхватила промпт молча.
+    _report_defects(defects, "эволюционировавшая инструкция", args.fail_on_defects)
 
 
 # --------------------------------------------------------------------------- #

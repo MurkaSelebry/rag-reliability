@@ -82,19 +82,20 @@ _EMPTY_CHUNK_DEMO = re.compile(r"\[(?:CHUNK|ЧАНК|ФРАГМЕНТ)\s*\d+\]\s
 #: Стоп-слова псевдо-корпуса: сюжеты, которых в банковском корпусе быть не может.
 #: Список — константа модуля, а не конфиг, потому что D2 не владеет ``configs/``;
 #: переопределяется файлом через ``--stopwords-file`` (см. ``load_stopwords``).
+#: Основа — то, что реально вшилось в закоммиченные эволюционировавшие инструкции.
+#: Термины подобраны так, чтобы не быть подстрокой банковского слова: «афин»
+#: сюда не годится, потому что срабатывает на «парафин».
 FOREIGN_DOMAIN_TERMS: tuple[str, ...] = (
     "хаббл",
     "телескоп",
     "соул-джаз",
     "соул джаз",
-    "парфенон",
-    "афин",
-    "википеди",
     "джаз",
+    "парфенон",
+    "википеди",
     "фотосинтез",
     "динозавр",
     "галактик",
-    "марс",
     "эверест",
     "шекспир",
     "моцарт",
@@ -157,7 +158,7 @@ def balanced_accuracy(golds: Sequence[int], preds: Sequence[int | None]) -> floa
 gepa_metric = balanced_accuracy
 
 
-def class_weights(golds: Sequence[int]) -> dict[int, float]:
+def class_weights(golds: Sequence[int], *, normalize: bool = False) -> dict[int, float]:
     """Вес класса ``n / (2 * n_class)``.
 
     Существует ради DSPy: GEPA агрегирует метрику как СРЕДНЕЕ по-примерных
@@ -165,6 +166,13 @@ def class_weights(golds: Sequence[int]) -> dict[int, float]:
     ``mean(example_score) == balanced_accuracy`` тождественно (проверяется
     тестом), то есть по-примерный скор GEPA и отчётная метрика — одно и то же
     число, а не две похожие величины.
+
+    ``normalize`` делит веса на максимальный, загоняя по-примерный скор в
+    [0, 1]. Это нужно на реальном дисбалансе: при 72/28 вес редкого класса равен
+    1.79, и если GEPA где-то клипует скор в [0, 1], награда за редкий класс
+    срезается — то есть ровно то свойство, ради которого метрику и меняли.
+    Деление на константу монотонно, поэтому порядок кандидатов не меняется, а
+    среднее остаётся пропорциональным balanced accuracy.
     """
     if not golds:
         raise ValueError("Cannot compute class weights on an empty set")
@@ -178,6 +186,9 @@ def class_weights(golds: Sequence[int]) -> dict[int, float]:
                 "set must contain both classes"
             )
         weights[label] = total / (2.0 * count)
+    if normalize:
+        peak = max(weights.values())
+        weights = {label: value / peak for label, value in weights.items()}
     return weights
 
 

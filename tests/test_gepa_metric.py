@@ -126,6 +126,29 @@ def test_class_weights_are_inverse_frequency() -> None:
     assert weights[0] == pytest.approx(100 / (2 * 28))
 
 
+def test_normalized_weights_stay_in_the_unit_interval_and_keep_the_ordering() -> None:
+    """При 72/28 сырой вес редкого класса равен 1.79. Если GEPA клипует скор в
+    [0, 1], награда за редкий класс срезается — а это ровно то свойство, ради
+    которого метрику и меняли."""
+    golds = _labels(72, 28)
+    raw = class_weights(golds)
+    normalized = class_weights(golds, normalize=True)
+
+    assert max(raw.values()) > 1.0
+    assert all(0.0 < value <= 1.0 for value in normalized.values())
+    assert normalized[0] / normalized[1] == pytest.approx(raw[0] / raw[1])
+
+    rng = np.random.default_rng(1)
+    for _ in range(5):
+        preds = rng.integers(0, 2, size=len(golds)).tolist()
+        mean = float(
+            np.mean(
+                [example_score(g, p, normalized) for g, p in zip(golds, preds, strict=True)]
+            )
+        )
+        assert mean == pytest.approx(balanced_accuracy(golds, preds) / max(raw.values()))
+
+
 def test_example_score_rejects_unknown_gold_label() -> None:
     with pytest.raises(ValueError, match="No class weight"):
         example_score(7, 7, class_weights(_labels(1, 1)))

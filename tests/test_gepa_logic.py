@@ -392,6 +392,19 @@ def test_foreign_domain_detector_is_case_and_inflection_tolerant() -> None:
     assert foreign_domain_hits("руины ПАРФЕНОНА") == ["парфенон"]
 
 
+def test_foreign_domain_terms_are_not_substrings_of_banking_words() -> None:
+    """Подстрочное сравнение ловит словоформы, но и ложные срабатывания: «афин»
+    сработал бы на «парафине». Список обязан оставаться чистым на банковском
+    тексте — иначе предупреждение перестанут читать."""
+    banking = (
+        "Ставка по накопительному счёту 4 процента годовых. Кэшбэк начисляется "
+        "рублями. Перевыпуск карты в отделении, парафин и марсианские сроки "
+        "здесь ни при чём: комиссия за перевод, эквайринг, овердрафт, ипотека, "
+        "страхование, брокерский счёт, реквизиты, СБП, тариф «Всё сразу»."
+    )
+    assert foreign_domain_hits(banking) == []
+
+
 def test_prompt_defects_flags_a_missing_verdict_anchor() -> None:
     defects = prompt_defects("Оцени ответ и напиши вывод.", "faithfulness")
     assert any("FAITHFULNESS" in defect for defect in defects)
