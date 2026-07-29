@@ -335,3 +335,83 @@ def test_score_cli_refuses_a_method_without_a_corpus_wide_scorer(tmp_path: Path)
                 "--output", str(tmp_path / "scores.jsonl"),
             ]
         )
+
+
+# --------------------------------------------------------------------------- #
+# Параллельный счёт: --workers
+# --------------------------------------------------------------------------- #
+
+
+def test_workers_preserve_corpus_order(tmp_path: Path) -> None:
+    """Порядок обязателен: --resume дочитывает файл сверху.
+
+    Если строки лягут «как посчиталось», обрыв оставит дыру в середине, а
+    перезапуск её не заметит.
+    """
+    output = _run(tmp_path, "--workers", "8")
+    assert [row["id"] for row in _rows(output)] == [
+        sample.id for sample in load_jsonl(DUMMY_DATA)
+    ]
+
+
+def test_workers_give_the_same_artifact_as_a_sequential_run(tmp_path: Path) -> None:
+    sequential = _rows(_run(tmp_path / "seq"))
+    parallel = _rows(_run(tmp_path / "par", "--workers", "4"))
+    assert sequential == parallel
+
+
+def test_workers_actually_run_concurrently(tmp_path: Path) -> None:
+    """Иначе флаг был бы косметикой: последовательный цикл под другим именем."""
+    import threading
+
+    output = tmp_path / "scores.jsonl"
+    samples = load_jsonl(DUMMY_DATA)
+    barrier = threading.Barrier(4, timeout=10)
+
+    def slow_scorer(sample: RagSample) -> Prediction:
+        # Проходит только если четыре потока оказались внутри одновременно.
+        barrier.wait()
+        return Prediction(id=sample.id, faithfulness_pred=0, relevance_pred=0)
+
+    n = score.score_samples(samples, slow_scorer, output, progress=False, workers=4)
+    assert n == len(samples)
+
+
+def test_resume_after_a_parallel_run_scores_the_rest(tmp_path: Path) -> None:
+    output = tmp_path / "scores.jsonl"
+    samples = load_jsonl(DUMMY_DATA)
+    ctx = registry.CommandContext(
+        data=Path(DUMMY_DATA), run_dir=tmp_path, predictions_path=output
+    )
+    scorer = registry.build_scorer("dummy_direct", ctx)
+
+    score.score_samples(samples[:10], scorer, output, progress=False, workers=4)
+    total = score.score_samples(samples, scorer, output, progress=False, resume=True, workers=4)
+
+    assert total == len(samples)
+    assert [row["id"] for row in _rows(output)] == [sample.id for sample in samples]
+
+
+def test_workers_below_one_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="workers must be >= 1"):
+        score.score_samples(
+            load_jsonl(DUMMY_DATA),
+            lambda sample: Prediction(id=sample.id, faithfulness_pred=0, relevance_pred=0),
+            tmp_path / "scores.jsonl",
+            progress=False,
+            workers=0,
+        )
+
+
+def test_m3_concurrency_reaches_the_command_context() -> None:
+    """Флаг обязан доезжать до реестра: иначе он молча ничего не делает."""
+    args = score.parse_args(
+        [
+            "--method", "m3_perchunk",
+            "--variant", "smoke",
+            "--data", DUMMY_DATA,
+            "--output", "scores.jsonl",
+            "--m3-concurrency", "16",
+        ]
+    )
+    assert score.build_context(args).m3_concurrency == 16

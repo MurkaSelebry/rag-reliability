@@ -24,7 +24,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rag_reliability.methods.surface.features import FEATURE_KEYS
 
@@ -282,6 +282,62 @@ def _m3(name: str) -> BuildCommand:
         return _maybe_limit(command, ctx)
 
     return build
+
+
+def _m3_perchunk(ctx: CommandContext) -> list[str]:
+    """Пофрагментная верификация faithfulness: свой стиль промпта, не режим."""
+    command = [
+        ctx.python,
+        "scripts/run_m3.py",
+        "--data",
+        str(ctx.data),
+        "--output",
+        str(ctx.predictions_path),
+        "--prompt-style",
+        "perchunk",
+        "--backend",
+        ctx.m3_backend,
+        "--model",
+        ctx.model,
+        "--max-tokens",
+        str(ctx.m3_max_tokens),
+        "--api-base",
+        ctx.m3_api_base,
+        "--api-key-env",
+        ctx.m3_api_key_env,
+        "--cache-dir",
+        ctx.m3_cache_dir,
+        "--concurrency",
+        str(ctx.m3_concurrency),
+    ]
+    return _maybe_limit(command, ctx)
+
+
+def _ft_judge(ctx: CommandContext) -> list[str]:
+    """Обучение судьи фолд за фолдом: команда собирается на один фолд.
+
+    Реестр не знает номера фолда, поэтому команда указывает нулевой; пять
+    фолдов запускаются пятью заданиями DataSphere (``jobs/ft_judge_fold*.yaml``).
+    """
+    return _maybe_limit(
+        [
+            ctx.python,
+            FT_JUDGE_RUNNER,
+            "--data",
+            str(ctx.data),
+            "--folds",
+            ctx.folds_path,
+            "--fold",
+            "0",
+            "--model",
+            ctx.model,
+            "--predictions-output",
+            str(ctx.predictions_path),
+            "--output-dir",
+            str(ctx.run_dir / "checkpoints"),
+        ],
+        ctx,
+    )
 
 
 def _m6(ctx: CommandContext) -> list[str]:
@@ -547,6 +603,54 @@ def _m3_scorer(name: str) -> ScorerFactory:  # noqa: C901 - одна ветка 
     return build
 
 
+def build_m3_chat_client(ctx: CommandContext) -> Any:
+    """Клиент судьи под пофрагментный путь: асинхронный при concurrency > 1.
+
+    Пофрагментная верификация шлёт по запросу на чанк, то есть 5-15 запросов на
+    кейс. Синхронный клиент делает их по очереди, и корпусный прогон
+    растягивается на часы там, где узкое место — сеть, а не GPU.
+    """
+    from rag_reliability.methods.m3.judge_client import (  # noqa: PLC0415
+        AsyncJudgeClient,
+        JudgeClient,
+    )
+
+    common = {
+        "model": ctx.model,
+        "api_base": ctx.m3_api_base,
+        "api_key": os.environ.get(ctx.m3_api_key_env, ""),
+        "cache_dir": ctx.m3_cache_dir,
+    }
+    if ctx.m3_concurrency > 1:
+        return AsyncJudgeClient(concurrency=ctx.m3_concurrency, **common)
+    return JudgeClient(**common)
+
+
+def _m3_perchunk_scorer(ctx: CommandContext) -> Scorer:
+    """Пофрагментные фичи faithfulness одного кейса.
+
+    Relevance по контракту C3 чанки не получает: её определение опирается
+    только на вопрос и ответ. Поэтому ``m3.p_rel`` здесь не появляется, а
+    выражение скора по умолчанию строится на ``m3.max_chunk_score``.
+    """
+    from rag_reliability.methods.m3.perchunk import score_per_chunk  # noqa: PLC0415
+    from rag_reliability.schema import Prediction as PredictionModel  # noqa: PLC0415
+
+    client = build_m3_chat_client(ctx)
+
+    def score(sample: RagSample) -> Prediction:
+        features = score_per_chunk(sample, client)
+        return PredictionModel(
+            id=sample.id,
+            faithfulness_pred=0,
+            relevance_pred=0,
+            prob_method="perchunk_logprobs",
+            scores={key: float(value) for key, value in features.items()},
+        )
+
+    return score
+
+
 def _lettucedetect_scorer(ctx: CommandContext) -> Scorer:
     import joblib  # noqa: PLC0415
 
@@ -623,6 +727,17 @@ _SURF_SCORE_EXPR = "surf.p_faith * surf.p_rel"
 
 _M3_SCORE_KEYS = ("m3.p_faith", "m3.p_rel")
 _M3_SCORE_EXPR = "m3.p_faith * m3.p_rel"
+
+FT_JUDGE_RUNNER = "scripts/train_ft_judge.py"
+#: Пофрагментный путь даёт фичи, а не вероятность оси: агрегат выбирает стэкер.
+_PERCHUNK_SCORE_KEYS = (
+    "m3.max_chunk_score",
+    "m3.mean_chunk_score",
+    "m3.chunk_disagreement",
+    "m3.n_supporting",
+    "m3.argmax_chunk",
+)
+_PERCHUNK_SCORE_EXPR = "m3.max_chunk_score"
 _PROMPT_SCORE_KEYS = ("prompt.p_faith", "prompt.p_rel")
 _PROMPT_SCORE_EXPR = "prompt.p_faith * prompt.p_rel"
 _LORA_SCORE_KEYS = ("lora.p_faith", "lora.p_rel")
@@ -706,6 +821,20 @@ METHODS: dict[str, MethodSpec] = {
         score_keys=_M3_SCORE_KEYS, default_score_expr=_M3_SCORE_EXPR,
         build_scorer=_m3_scorer("m3_openai_judge"),
     ),
+    "m3_perchunk": MethodSpec(
+        "m3_perchunk", "Method 3 — per-chunk faithfulness", "m3", None, _m3_perchunk, None,
+        ("OpenAI-compatible endpoint",),
+        score_keys=_PERCHUNK_SCORE_KEYS, default_score_expr=_PERCHUNK_SCORE_EXPR,
+        build_scorer=_m3_perchunk_scorer,
+    ),
+    "ft_judge": MethodSpec(
+        "ft_judge", "Method 3 — fine-tuned judge (per fold)", "m3", None, _ft_judge, None,
+        ("data/splits/folds.json", "GPU >= 70 GB"),
+        score_keys=_M3_SCORE_KEYS, default_score_expr=_M3_SCORE_EXPR,
+        # Один прогон = один фолд, поэтому и не corpus_wide, и не corpus_runner:
+        # корпус покрывают пять запусков, а не один. Куда идти — в NOT_CASE_WISE.
+        corpus_wide=False,
+    ),
     "m6_selfcheck": MethodSpec(
         "m6_selfcheck",
         "Method 6 — SelfCheck features",
@@ -765,6 +894,9 @@ def resolve_names(raw: str) -> list[str]:
 WAVE3_OWNER: dict[str, str] = {
     "encoder": "out-of-fold scoring is task C2 (task/C2-encoder)",
     "m6_selfcheck": "grounding rewrite is task C4 (task/C4-m6-grounding)",
+    # Не «ещё не сделано», а «по построению не покейсово»: обучение видит фолд
+    # целиком, и корпус покрывают пять запусков, а не один.
+    "ft_judge": f"training runs fold by fold: {FT_JUDGE_RUNNER} --fold N",
 }
 
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import yaml
@@ -27,7 +27,7 @@ from tqdm import tqdm
 from rag_reliability.dataset import load_jsonl
 from rag_reliability.methods import registry
 from rag_reliability.run_meta import git_state
-from rag_reliability.schema import RagSample
+from rag_reliability.schema import Prediction, RagSample
 
 DEFAULT_FLUSH_EVERY = 20
 
@@ -50,6 +50,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_FLUSH_EVERY,
         help="Flush the output file every N rows (interrupted runs stay readable)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help=(
+            "Сколько кейсов считать одновременно. >1 имеет смысл только для методов, "
+            "упирающихся в сеть (судья на vLLM); локальные модели он не ускорит"
+        ),
+    )
     parser.add_argument("--seed", type=int, default=0, help="Recorded in run.yaml")
     parser.add_argument("--run-yaml", default=None, help="Default: run.yaml next to --output")
 
@@ -68,6 +77,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--m3-api-base", default="http://localhost:8000/v1")
     parser.add_argument("--m3-api-key-env", default="OPENAI_API_KEY")
     parser.add_argument("--m3-cache-dir", default="results/m3/cache")
+    parser.add_argument(
+        "--m3-concurrency",
+        type=int,
+        default=1,
+        help=(
+            "Параллельные запросы внутри одного кейса. Работает там, где кейс "
+            "порождает несколько вызовов (--method m3_perchunk: по вызову на чанк)"
+        ),
+    )
     parser.add_argument("--m3-dummy-strategy", default="always_reliable")
     parser.add_argument("--independent-faithfulness-threshold", type=float, default=0.20)
     parser.add_argument("--independent-relevance-threshold", type=float, default=0.10)
@@ -93,6 +111,7 @@ def build_context(args: argparse.Namespace) -> registry.CommandContext:
         m3_api_base=args.m3_api_base,
         m3_api_key_env=args.m3_api_key_env,
         m3_cache_dir=args.m3_cache_dir,
+        m3_concurrency=args.m3_concurrency,
         m3_dummy_strategy=args.m3_dummy_strategy,
         independent_faithfulness_threshold=args.independent_faithfulness_threshold,
         independent_relevance_threshold=args.independent_relevance_threshold,
@@ -132,6 +151,27 @@ def _truncate_after(path: Path, n_rows: int) -> None:
     path.write_text("".join(kept), encoding="utf-8")
 
 
+def _scored_in_order(
+    samples: Sequence[RagSample], scorer: registry.Scorer, workers: int
+) -> Iterator[Prediction]:
+    """Предсказания строго в порядке корпуса, считанные в ``workers`` потоков.
+
+    Порядок обязателен: строки пишутся по мере готовности, и ``--resume``
+    дочитывает файл сверху. Если порядок «как посчиталось», то обрыв оставит
+    дыру в середине, а перезапуск её не заметит.
+
+    Потоки, а не процессы: узкое место здесь — ожидание ответа vLLM, а скореры
+    держат сетевой клиент, который через границу процесса не переживёт.
+    """
+    if workers <= 1:
+        yield from (scorer(sample) for sample in samples)
+        return
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        yield from pool.map(scorer, samples)
+
+
 def score_samples(
     samples: list[RagSample],
     scorer: registry.Scorer,
@@ -140,10 +180,13 @@ def score_samples(
     resume: bool = False,
     flush_every: int = DEFAULT_FLUSH_EVERY,
     progress: bool = True,
+    workers: int = 1,
 ) -> int:
     """Посчитать кейсы и дописать их в output. Возвращает число строк в файле."""
     if flush_every < 1:
         raise ValueError(f"--flush-every must be >= 1, got {flush_every}")
+    if workers < 1:
+        raise ValueError(f"--workers must be >= 1, got {workers}")
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -160,9 +203,13 @@ def score_samples(
     n_written = len(done)
     mode = "a" if resume else "w"
     with output.open(mode, encoding="utf-8") as handle:
-        iterator = tqdm(pending, desc="score", disable=not progress)
-        for index, sample in enumerate(iterator, start=1):
-            prediction = scorer(sample)
+        iterator = tqdm(
+            zip(pending, _scored_in_order(pending, scorer, workers), strict=True),
+            desc="score",
+            total=len(pending),
+            disable=not progress,
+        )
+        for index, (sample, prediction) in enumerate(iterator, start=1):
             if prediction.id != sample.id:
                 raise ValueError(
                     f"Scorer returned prediction id {prediction.id!r} for sample {sample.id!r}"
@@ -226,6 +273,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.output,
         resume=args.resume,
         flush_every=args.flush_every,
+        workers=args.workers,
     )
 
     run_yaml = Path(args.run_yaml) if args.run_yaml else Path(args.output).parent / "run.yaml"

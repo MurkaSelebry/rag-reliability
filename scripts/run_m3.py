@@ -76,9 +76,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--prompt-style",
-        choices=["joint", "axes"],
+        choices=["joint", "axes", "perchunk"],
         default="axes",
-        help="axes (по умолчанию) = отдельный вызов на ось; joint = прежний общий вызов",
+        help=(
+            "axes (по умолчанию) = отдельный вызов на ось; joint = прежний общий вызов; "
+            "perchunk = по вызову на чанк, только ось faithfulness"
+        ),
     )
     parser.add_argument("--prompts-dir", default="configs/prompts")
     parser.add_argument("--prompt-file-faithfulness", default=None, help="--mode gepa, ось faith")
@@ -404,6 +407,62 @@ def run_axes(args: argparse.Namespace, samples: list) -> list[Prediction]:
     return predictions
 
 
+def build_perchunk_client(args: argparse.Namespace) -> Any:
+    """Клиент пофрагментного пути: асинхронный при --concurrency > 1.
+
+    Пофрагментная верификация шлёт по запросу на чанк, то есть 5-15 запросов на
+    кейс вместо двух. Синхронный клиент делает их по очереди, и корпусный
+    прогон растягивается на часы там, где узкое место — сеть, а не GPU.
+    """
+    if args.backend == "dummy":
+        return DummyAxisClient()
+    if args.backend not in ("openai_judge", "openai"):
+        raise ValueError(
+            f"--prompt-style perchunk has no client for backend {args.backend!r}; "
+            "expected 'openai_judge' or 'dummy' (per-chunk scoring reads verdict logprobs)"
+        )
+    from rag_reliability.methods.m3.judge_client import (  # noqa: PLC0415
+        AsyncJudgeClient,
+        JudgeClient,
+    )
+
+    common = {
+        "model": args.model,
+        "api_base": args.api_base,
+        "api_key": os.environ.get(args.api_key_env, ""),
+        "cache_dir": args.cache_dir,
+    }
+    concurrency = int(_flag(args, "concurrency", 1))
+    if concurrency > 1:
+        return AsyncJudgeClient(concurrency=concurrency, **common)
+    return JudgeClient(**common)
+
+
+def run_perchunk(args: argparse.Namespace, samples: list) -> list[Prediction]:
+    """Пофрагментная верификация faithfulness: по вызову на каждый чанк.
+
+    Ось relevance чанки не получает по контракту C3 — её определение опирается
+    только на вопрос и ответ, — поэтому вероятностей осей здесь нет вовсе.
+    Артефакт несёт пять фич, а агрегат из них выбирает стэкер.
+    """
+    from rag_reliability.methods.m3.perchunk import score_per_chunk  # noqa: PLC0415
+
+    client = build_perchunk_client(args)
+    predictions: list[Prediction] = []
+    for sample in tqdm(samples, desc=f"m3/perchunk/{args.backend}"):
+        features = score_per_chunk(sample, client)
+        predictions.append(
+            Prediction(
+                id=sample.id,
+                faithfulness_pred=0,
+                relevance_pred=0,
+                prob_method="perchunk_logprobs",
+                scores={key: float(value) for key, value in features.items()},
+            )
+        )
+    return predictions
+
+
 def _grid(raw: str, cast: Any) -> list:
     values = [chunk.strip() for chunk in str(raw).split(",") if chunk.strip()]
     if not values:
@@ -495,7 +554,18 @@ def main() -> None:
             write_run_meta(args.run_meta, args)
         return
 
-    if _flag(args, "prompt_style", "axes") == "axes":
+    prompt_style = _flag(args, "prompt_style", "axes")
+    if prompt_style == "perchunk":
+        predictions = run_perchunk(args, samples)
+        save_jsonl(predictions, args.output)
+        print(f"Wrote {len(predictions)} per-chunk prediction(s) to {args.output}")
+        if args.run_meta:
+            from rag_reliability.run_meta import write_run_meta  # noqa: PLC0415
+
+            write_run_meta(args.run_meta, args)
+        return
+
+    if prompt_style == "axes":
         predictions = run_axes(args, samples)
         save_jsonl(predictions, args.output)
         invalid = sum(prediction.invalid_output for prediction in predictions)
