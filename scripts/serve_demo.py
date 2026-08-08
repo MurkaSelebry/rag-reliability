@@ -144,13 +144,16 @@ def method_statuses(
             "reason": "batch-only: requires OpenAI-compatible endpoint configuration",
         },
         "m6_selfcheck": {
-            "available": False,
-            "artifact": None,
-            "reason": "batch-only: requires precomputed Method 6 feature JSONL",
-        },
-        "independent": {"available": True, "artifact": None},
+    "available": False,
+    "artifact": None,
+    "reason": "batch-only: requires precomputed Method 6 feature JSONL",
+},
+"independent": {"available": True, "artifact": None},
+"independent_v2": {
+    "available": Path("results/independent_v2/model.joblib").exists(),
+    "artifact": "results/independent_v2/model.joblib",
+},
     }
-
 
 def method_choice_labels(statuses: dict[str, dict[str, Any]]) -> list[str]:
     labels: list[str] = []
