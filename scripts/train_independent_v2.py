@@ -63,6 +63,25 @@ def parse_args() -> argparse.Namespace:
         help="Directory for predictions and metrics.",
     )
 
+    # Explicit shared split files
+    parser.add_argument(
+        "--train-data",
+        default=None,
+        help="Explicit training split JSONL.",
+    )
+
+    parser.add_argument(
+        "--val-data",
+        default=None,
+        help="Explicit validation split JSONL.",
+    )
+
+    parser.add_argument(
+        "--test-data",
+        default=None,
+        help="Explicit held-out test split JSONL.",
+    )
+
     parser.add_argument(
         "--test-size",
         type=float,
@@ -184,14 +203,20 @@ def macro_f1(
 def main() -> None:
     args = parse_args()
 
-    samples = load_jsonl(args.data)
+    # Use explicit shared splits when all three are provided.
+    if args.train_data and args.val_data and args.test_data:
+        train_samples = load_jsonl(args.train_data)
+        validation_samples = load_jsonl(args.val_data)
+        test_samples = load_jsonl(args.test_data)
+    else:
+        samples = load_jsonl(args.data)
 
-    train_samples, validation_samples, test_samples = split_samples(
-        samples,
-        test_size=args.test_size,
-        validation_size=args.validation_size,
-        seed=args.seed,
-    )
+        train_samples, validation_samples, test_samples = split_samples(
+            samples,
+            test_size=args.test_size,
+            validation_size=args.validation_size,
+            seed=args.seed,
+        )
 
     print(
         f"Split: train={len(train_samples)}, "
