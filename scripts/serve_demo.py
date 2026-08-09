@@ -143,6 +143,16 @@ def method_statuses(
             "artifact": None,
             "reason": "batch-only: requires OpenAI-compatible endpoint configuration",
         },
+        "m3_perchunk": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: one request per chunk needs an OpenAI-compatible endpoint",
+        },
+        "ft_judge": {
+            "available": False,
+            "artifact": None,
+            "reason": "batch-only: trains fold by fold via scripts/train_ft_judge.py",
+        },
         "m6_selfcheck": {
             "available": False,
             "artifact": None,

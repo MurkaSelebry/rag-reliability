@@ -52,6 +52,16 @@ m6 = [
     "transformers>=4.40,<5",
     "sentence-transformers>=3.0",
 ]
+ft = [
+    # Дообучение судьи (scripts/train_ft_judge.py). Отдельным extra, а не в
+    # encoder: там энкодер на 150M, здесь LoRA поверх 7B, и bitsandbytes
+    # ставится только под CUDA.
+    "torch>=2.2",
+    "transformers>=4.44,<5",
+    "peft>=0.11",
+    "accelerate>=0.33",
+    "bitsandbytes>=0.43; platform_system == 'Linux'",
+]
 cloud = [
     "openai>=1.0",
 ]
