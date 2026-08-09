@@ -20,6 +20,9 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -63,6 +66,7 @@ _SPLIT_SAMPLES_CALL_RE = re.compile(r"\bsplit_samples\s*\(")
 _STALE_BRANCH_RE = re.compile(r"""["']qwen7b-notebook["']""")
 _BRANCH_RE = re.compile(r'^\s*BRANCH\s*=\s*"integration"\s*(?:#.*)?$', re.MULTILINE)
 _SAVE_STRATEGY_RE = re.compile(r'^\s*SAVE_STRATEGY\s*=\s*"(\w+)"', re.MULTILINE)
+_FLAG_RE = re.compile(r"--[a-zA-Z0-9][\w-]*")
 
 
 def _read_cells(path: Path) -> list[dict]:
@@ -194,6 +198,40 @@ def test_job_configs_are_complete(job: dict) -> None:
         "обучение 7B рассчитаны на g2.1 (1× A100 80 GB)"
     )
     assert job["outputs"], f"Job {job['name']} ничего не выгружает — артефакт умрёт вместе с VM"
+
+
+def test_job_commands_match_cli_signatures(job: dict) -> None:
+    """Флаги задания существуют в argparse скрипта, который оно зовёт.
+
+    Конфиги заданий и CLI писались в параллельных ветках одной волны: пока обе
+    не влиты, разойтись они не могут, а после слияния расхождение всплывает
+    только на GPU через argparse-ошибку — то есть после выделения инстанса.
+    Именно так ``jobs/gepa_*.yaml`` пережили переезд ``run_gepa.py`` на
+    ``--output-dir``.
+    """
+    tokens = shlex.split(job["cmd"])
+    if tokens[0] == "bash":  # обёртка jobs/_with_vllm.sh перед самой командой
+        tokens = tokens[2:]
+    script = REPO_ROOT / tokens[1]
+    assert script.is_file(), f"Job {job['name']} зовёт несуществующий {tokens[1]}"
+
+    completed = subprocess.run(  # noqa: S603
+        [sys.executable, str(script), "--help"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    assert completed.returncode == 0, (
+        f"{tokens[1]} --help упал, сверить флаги задания {job['name']} нечем:\n"
+        f"{completed.stderr[-500:]}"
+    )
+    known = set(_FLAG_RE.findall(completed.stdout))
+    unknown = sorted({token for token in tokens[2:] if token.startswith("--")} - known)
+    assert not unknown, (
+        f"Job {job['name']} передаёт {unknown} — таких флагов у {tokens[1]} нет. "
+        "Задание упадёт на argparse уже после выделения A100."
+    )
 
 
 def test_job_configs_do_not_call_split_samples(job: dict) -> None:

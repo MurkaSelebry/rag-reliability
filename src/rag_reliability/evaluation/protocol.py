@@ -157,13 +157,18 @@ def _score_prefixes(prediction: Prediction) -> dict[str, dict[str, float]]:
     return grouped
 
 
-def _resolve_axis_keys(prediction: Prediction) -> tuple[str, str]:
-    """Ключи ``<method>.p_faith`` и ``<method>.p_rel`` единственного метода в scores."""
-    candidates = sorted(
+def _axis_prefixes(prediction: Prediction) -> list[str]:
+    """Префиксы методов, у которых в scores есть обе оси."""
+    return sorted(
         prefix
         for prefix, signals in _score_prefixes(prediction).items()
         if "p_faith" in signals and "p_rel" in signals
     )
+
+
+def _resolve_axis_keys(prediction: Prediction) -> tuple[str, str]:
+    """Ключи ``<method>.p_faith`` и ``<method>.p_rel`` единственного метода в scores."""
+    candidates = _axis_prefixes(prediction)
     if not candidates:
         raise ValueError(
             f"Prediction {prediction.id!r} has no '<method>.p_faith' + '<method>.p_rel' pair "
@@ -175,6 +180,18 @@ def _resolve_axis_keys(prediction: Prediction) -> tuple[str, str]:
             "the reliability score is ambiguous, pass --score-expr explicitly"
         )
     return f"{candidates[0]}.p_faith", f"{candidates[0]}.p_rel"
+
+
+def has_axis_scores(prediction: Prediction) -> bool:
+    """Есть ли в артефакте пара ``p_faith``/``p_rel`` ровно одного метода.
+
+    Не всякий метод даёт обе оси: пофрагментная верификация судит только
+    faithfulness (ось relevance чанков не получает по построению) и выдаёт
+    ``m3.max_chunk_score`` и соседние фичи. Поосевая диагностика для такого
+    артефакта не определена, и вызывающий отличает «оси не посчитаны» от
+    «оси посчитаны и вышли нулевыми» до того, как поймает исключение.
+    """
+    return len(_axis_prefixes(prediction)) == 1
 
 
 def _require_score(prediction: Prediction, key: str) -> float:

@@ -24,6 +24,7 @@ from rag_reliability.evaluation.protocol import (
     faith_score_fn,
     fit_threshold,
     grid_macro_f1,
+    has_axis_scores,
     load_folds,
     mean_macro_f1_over_repeats,
     metric_with_ci,
@@ -867,3 +868,106 @@ def test_fold_isolation_guard_rejects_every_broken_partition(
     """Проверка живёт в рантайме: она стережёт будущие правки цикла, а не текущую."""
     with pytest.raises(LeakageError, match=message):
         _check_fold_isolation(np.array(train, dtype=int), np.array(test, dtype=int), 4, 0, 0)
+
+
+# --------------------------------------------------------------------------- #
+# Артефакты с одной осью
+# --------------------------------------------------------------------------- #
+
+
+def single_axis_fixture(tmp_path: Path, n: int = 80) -> dict[str, Path]:
+    """Корпус и артефакт пофрагментной верификации: только ось faithfulness.
+
+    Ключи те же, что пишет ``methods/m3/perchunk.py``: пары ``p_faith``/``p_rel``
+    в нём нет вовсе, потому что промпт relevance чанков не получает.
+    """
+    samples, joint = separable_corpus(n)
+    predictions = [
+        Prediction(
+            id=prediction.id,
+            faithfulness_pred=0,
+            relevance_pred=0,
+            scores={
+                "m3.max_chunk_score": prediction.scores["m3.p_faith"],
+                "m3.mean_chunk_score": prediction.scores["m3.p_faith"] * 0.9,
+                "m3.chunk_disagreement": 0.1,
+                "m3.n_supporting": 2.0,
+                "m3.argmax_chunk": 0.0,
+            },
+        )
+        for prediction in joint
+    ]
+    corpus = write_corpus(tmp_path / "corpus.jsonl", samples)
+    scores = write_scores(
+        tmp_path / "predictions" / "alfa" / "m3_judge" / "perchunk" / "scores.jsonl", predictions
+    )
+    folds_path = tmp_path / "folds.json"
+    folds_path.write_text(
+        json.dumps(
+            make_folds(
+                round_robin([sample.id for sample in samples], n_repeats=2),
+                n_repeats=2,
+                sha256=sha256_file(corpus),
+            )
+        ),
+        encoding="utf-8",
+    )
+    return {"corpus": corpus, "scores": scores, "folds": folds_path, "output": tmp_path / "r.json"}
+
+
+def test_has_axis_scores_distinguishes_single_axis_artifacts() -> None:
+    assert has_axis_scores(make_prediction("case_0000", 0.7, 0.8))
+    assert not has_axis_scores(
+        Prediction(
+            id="case_0000",
+            faithfulness_pred=0,
+            relevance_pred=0,
+            scores={"m3.max_chunk_score": 0.7, "m3.chunk_disagreement": 0.1},
+        )
+    )
+
+
+def test_cli_scores_a_single_axis_artifact_and_omits_axis_diagnostics(tmp_path: Path) -> None:
+    """Пофрагментный прогон оценивается, а поосевые F1 не выдумываются.
+
+    До этого CLI падал на поиске пары ``p_faith``/``p_rel``, и артефакт метода,
+    у которого одна ось, нельзя было оценить вообще — при том что первичная
+    метрика считается по явному ``--score-expr`` и осей не требует.
+    """
+    paths = single_axis_fixture(tmp_path)
+
+    assert (
+        cli.main(
+            [
+                "--data", str(paths["corpus"]),
+                "--folds", str(paths["folds"]),
+                "--scores", str(paths["scores"]),
+                "--score-expr", "m3.max_chunk_score",
+                "--output", str(paths["output"]),
+                *CHEAP_CLI,
+            ]
+        )
+        == 0
+    )
+    report = json.loads(paths["output"].read_text(encoding="utf-8"))
+    assert report["axes"] == {}, "ось, которой в артефакте нет, не должна появляться в отчёте"
+    assert report["primary"]["value"] > 0.0
+
+
+def test_cli_keeps_the_axis_that_was_given_explicitly(tmp_path: Path) -> None:
+    """Явный --faith-expr считается и для однооосевого артефакта; relevance — нет."""
+    paths = single_axis_fixture(tmp_path)
+
+    cli.main(
+        [
+            "--data", str(paths["corpus"]),
+            "--folds", str(paths["folds"]),
+            "--scores", str(paths["scores"]),
+            "--score-expr", "m3.max_chunk_score",
+            "--faith-expr", "m3.max_chunk_score",
+            "--output", str(paths["output"]),
+            *CHEAP_CLI,
+        ]
+    )
+    report = json.loads(paths["output"].read_text(encoding="utf-8"))
+    assert set(report["axes"]) == {"faithfulness_f1_macro"}

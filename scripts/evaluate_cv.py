@@ -34,6 +34,7 @@ from rag_reliability.evaluation.protocol import (
     evaluate_cv_labeled,
     evaluate_legacy_holdout,
     faith_score_fn,
+    has_axis_scores,
     load_folds,
     rel_score_fn,
 )
@@ -187,6 +188,14 @@ def _score_fn(expression: str | None, fallback: ScoreFn) -> ScoreFn:
     return compile_score_expr(expression) if expression else fallback
 
 
+def _faithfulness_label(sample: RagSample) -> int:
+    return sample.faithfulness
+
+
+def _relevance_label(sample: RagSample) -> int:
+    return sample.relevance
+
+
 # --------------------------------------------------------------------------- #
 # Режимы
 # --------------------------------------------------------------------------- #
@@ -207,24 +216,32 @@ def run_cv(args: argparse.Namespace) -> int:
         score_fn=score_fn,
         grid_step=args.grid_step,
     )
-    axes = {
-        "faithfulness_f1_macro": evaluate_cv_labeled(
+    # Поосевая диагностика опускается, когда метод не даёт пары p_faith/p_rel и
+    # выражение оси не задано явно: пофрагментная верификация судит только
+    # faithfulness. Раньше такой артефакт вообще нельзя было оценить — CLI падал
+    # на поиске ключей осей, хотя первичная метрика считалась по --score-expr.
+    # Пустой axes допускается схемой EvaluationReport; выдумывать ось из чужого
+    # сигнала нельзя — это дало бы правдоподобное число, ничего не измеряющее.
+    axes = {}
+    axes_available = has_axis_scores(predictions[0])
+    for name, expression, fallback, label_fn in (
+        ("faithfulness_f1_macro", args.faith_expr, faith_score_fn, _faithfulness_label),
+        ("relevance_f1_macro", args.rel_expr, rel_score_fn, _relevance_label),
+    ):
+        if expression is None and not axes_available:
+            print(
+                f"{name}: пропущено — в артефакте нет пары '<метод>.p_faith'/'.p_rel', "
+                f"а выражение оси не задано (ключи: {sorted(predictions[0].scores)[:5]})"
+            )
+            continue
+        axes[name] = evaluate_cv_labeled(
             samples,
             predictions,
             folds,
-            score_fn=_score_fn(args.faith_expr, faith_score_fn),
+            score_fn=_score_fn(expression, fallback),
             grid_step=args.grid_step,
-            label_fn=lambda sample: sample.faithfulness,
-        ),
-        "relevance_f1_macro": evaluate_cv_labeled(
-            samples,
-            predictions,
-            folds,
-            score_fn=_score_fn(args.rel_expr, rel_score_fn),
-            grid_step=args.grid_step,
-            label_fn=lambda sample: sample.relevance,
-        ),
-    }
+            label_fn=label_fn,
+        )
 
     comparisons = [
         compare_runs(
