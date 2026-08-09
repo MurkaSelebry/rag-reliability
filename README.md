@@ -212,6 +212,16 @@ and the forthcoming CV reports linked from [docs/experiments.md](docs/experiment
 On the 36-sample dummy set, zero-shot direct reaches `reliable_f1 = 0.86`
 (toy scale — see the experiments doc for caveats).
 
+Methods 3 and 6 already have numbers on the canonical protocol, written up
+with their cohorts and caveats in
+[docs/report/methods_3_6_results.md](docs/report/methods_3_6_results.md):
+Method 6 is a measured negative result (best feature AUC 0.548, branch closed
+as a development direction), while `m3.p_faith` is the only feature in the
+project with a significant stacking gain (+0.0752, 95% CI [+0.0158; +0.1344],
+p = 0.013 — on a 331-case cohort, not the full 1480). The two standalone
+notebooks that (re)produce those numbers live in
+[notebooks/standalone/](notebooks/standalone/README.md).
+
 ## Metrics
 
 Reported by `rag-judge eval` (`scripts/evaluate.py`):

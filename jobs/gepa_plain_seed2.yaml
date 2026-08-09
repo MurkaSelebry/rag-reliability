@@ -7,10 +7,11 @@ desc: >-
 cmd: >-
   bash jobs/_with_vllm.sh
   python scripts/run_gepa.py
+  --mode evolve --axis faithfulness
   --variant plain --seed 2 --auto medium
-  --folds data/splits/folds_alfa.json
+  --data data/alfa.jsonl --folds data/splits/folds_alfa.json
   --model Qwen/Qwen2.5-7B-Instruct --api-base http://localhost:8000/v1
-  --output-prompt artifacts/gepa/plain_seed2/prompt.txt
+  --output-dir artifacts/gepa/plain_seed2
 
 env:
   python:
