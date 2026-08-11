@@ -169,8 +169,11 @@ def method_statuses(
             "reason": "batch-only: out-of-fold scoring needs the whole corpus and folds.json",
         },
         "independent": {"available": True, "artifact": None},
+        "independent_v2": {
+            "available": Path("results/independent_v2/model.joblib").exists(),
+            "artifact": "results/independent_v2/model.joblib",
+        },
     }
-
 
 def method_choice_labels(statuses: dict[str, dict[str, Any]]) -> list[str]:
     labels: list[str] = []

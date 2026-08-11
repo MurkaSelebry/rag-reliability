@@ -20,8 +20,8 @@ def _ctx(tmp_path: Path) -> registry.CommandContext:
     )
 
 
-def test_registry_has_nineteen_methods() -> None:
-    assert len(registry.METHODS) == 19
+def test_registry_has_twenty_methods() -> None:
+    assert len(registry.METHODS) == 20
     assert set(registry.all_method_names()) == set(registry.METHODS)
 
 

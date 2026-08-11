@@ -400,7 +400,7 @@ python scripts/train_encoder_baseline.py \
 | [docs/handoff/](docs/handoff/HANDOFF.md) | Task cards and the working agreement between contributors |
 | [docs/diagrams/](docs/diagrams/README.md) | PlantUML architecture, benchmark pipeline, method taxonomy, and sample data-flow diagrams |
 | [notebooks/standalone/](notebooks/standalone/README.md) | Self-contained walkthroughs of Methods 3 and 6 |
-| [notebooks/](notebooks/README.md) | DataSphere launcher notebooks (`00`–`40`) |
+| [notebooks/](notebooks/README.md) | DataSphere launcher notebooks (`00`–`40`) and full-FT Qwen2.5-7B notebooks |
 
 ## Project layout
 

@@ -63,15 +63,15 @@ group-сплитах и завышены.
 
 ---
 
-## Что было раньше
+## Full-FT ноутбуки Methods 1/2
 
-`qwen7b_full_finetune.ipynb` и `qwen7b_full_finetune_datasphere.ipynb` удалены.
-Оба клонировали устаревшую ветку `qwen7b-notebook`, резали корпус через
-`split_samples` и держали обучение с оценкой прямо в ячейках; в DataSphere-версии
-вдобавок стояло `SAVE_STRATEGY = "no"` — восьмичасовой прогон терялся целиком при
-обрыве сессии. Их роль перешла к `30_finetune_judge.ipynb`; рабочие части (ассерт
-VRAM ≥ 70 GB, 8-bit AdamW, gradient checkpointing, bf16, экспорт на HF Hub)
-сохранены.
+Раньше `qwen7b_full_finetune*.ipynb` были вычищены из launcher-контура: они
+клонировали ветку `qwen7b-notebook`, резали корпус через `split_samples` и
+держали обучение с оценкой в ячейках. Их роль для FT судьи по фолдам перешла к
+`30_finetune_judge.ipynb`.
+
+В `main` полный FT Methods 1/2 снова задокументирован отдельными ноутбуками —
+они лежат рядом; см. секцию ниже.
 
 ---
 
@@ -81,3 +81,21 @@ VRAM ≥ 70 GB, 8-bit AdamW, gradient checkpointing, bf16, экспорт на H
   типовые проблемы, пробелы в CLI.
 - [`docs/specs/90_DATASPHERE_runbook.md`](../docs/specs/90_DATASPHERE_runbook.md) —
   полный runbook: конфигурации, раскладка хранилища, бюджеты прогонов.
+
+---
+
+## Full fine-tune notebooks (Methods 1/2)
+
+Из `main` снова лежат рядом с launcher-контуром:
+
+| Notebook | Role |
+|---|---|
+| [`qwen7b_full_finetune.ipynb`](qwen7b_full_finetune.ipynb) | Full FT Qwen2.5-7B (direct/marker) for Colab/Kaggle/DataSphere |
+| [`qwen7b_full_finetune_datasphere.ipynb`](qwen7b_full_finetune_datasphere.ipynb) | DataSphere-oriented variant of the same full-FT path |
+| [`eval_finetuned_datasphere.ipynb`](eval_finetuned_datasphere.ipynb) | Evaluate a saved full-FT checkpoint on DataSphere |
+
+Для корпусного FT судьи по фолдам в этом репозитории основной путь — всё ещё
+[`30_finetune_judge.ipynb`](30_finetune_judge.ipynb) + `jobs/ft_judge_fold*.yaml`.
+Подробности по full-FT ноутбукам Methods 1/2 — в
+[`docs/qwen7b_full_ft_results.md`](../docs/qwen7b_full_ft_results.md).
+
