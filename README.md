@@ -392,6 +392,8 @@ python scripts/train_encoder_baseline.py \
 | [docs/m3_m6.md](docs/m3_m6.md) | Selective Method 3/6 port from the `m3-m6` branch |
 | [docs/experiments.md](docs/experiments.md) | All results so far, how to reproduce, environment gotchas |
 | [docs/report/methods_3_6_results.md](docs/report/methods_3_6_results.md) | **Methods 3 and 6: what is measured, on which cohort, with which caveats** |
+| [docs/report/article_materials_m3_m6.md](docs/report/article_materials_m3_m6.md) | Article source material for Methods 3 and 6: formulas, hyperparameters, every number with provenance, LaTeX-ready tables, and what is *not* measured |
+| [docs/report/presentation_materials_m3_m6.md](docs/report/presentation_materials_m3_m6.md) | Slide-by-slide material for the team deck, including the claims on the current deck that no longer hold |
 | [docs/report/wave3.md](docs/report/wave3.md) | Wave 3 outcome: stacking numbers, the M6 decision, what was left undone |
 | [docs/specs/](docs/specs) | Per-phase measurement specifications (protocol, Method 3, Method 6, DataSphere runbook) |
 | [docs/datasphere.md](docs/datasphere.md) | Running on Yandex DataSphere: hardware, stack pins, Jobs |
