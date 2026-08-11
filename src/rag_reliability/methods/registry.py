@@ -81,6 +81,9 @@ class CommandContext:
     folds_path: str = "data/splits/folds.json"
     independent_faithfulness_threshold: float = 0.20
     independent_relevance_threshold: float = 0.10
+
+    independent_v2_model: str = "results/independent_v2/model.joblib"
+
     limit: int | None = None
 
 
@@ -402,6 +405,22 @@ def _independent(ctx: CommandContext) -> list[str]:
             str(ctx.independent_faithfulness_threshold),
             "--relevance-threshold",
             str(ctx.independent_relevance_threshold),
+        ],
+        ctx,
+    )
+
+
+def _independent_v2(ctx: CommandContext) -> list[str]:
+    return _maybe_limit(
+        [
+            ctx.python,
+            "scripts/run_independent_v2.py",
+            "--data",
+            str(ctx.data),
+            "--model",
+            ctx.independent_v2_model,
+            "--output",
+            str(ctx.predictions_path),
         ],
         ctx,
     )
@@ -865,6 +884,15 @@ METHODS: dict[str, MethodSpec] = {
         score_keys=("ind.faith_score", "ind.rel_score"),
         default_score_expr="ind.faith_score * ind.rel_score",
         build_scorer=_independent_scorer,
+    ),
+    "independent_v2": MethodSpec(
+        "independent_v2", "Independent evaluator V2 — learned features", "independent", None,
+        _independent_v2, None,
+        ("results/independent_v2/model.joblib",),
+        score_keys=("ind.p_faith", "ind.p_rel"),
+        default_score_expr="ind.p_faith * ind.p_rel",
+        # Batch-only until a per-case scorer is wired; train/infer via scripts/*.
+        corpus_wide=False,
     ),
 }
 
